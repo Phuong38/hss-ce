@@ -55,8 +55,9 @@ Ensure you have **Node.js (v18+)** and **Git** installed on your system.
 #### Option A: Run via NPX (Recommended - No Install Needed)
 Run the configuration wizard directly without global installation issues:
 ```bash
-npx hss-ce-integrate
+npx --package hss-ce hss-ce-integrate
 ```
+
 
 #### Option B: Install via NPM (Global)
 Install globally to make the commands permanent:
