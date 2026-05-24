@@ -1,0 +1,28 @@
+{
+  "name": "hss-ce",
+  "version": "1.0.0",
+  "description": "Hybrid Semantic-Structural Context Engine. Optimizes codebase context retrieval for AI coding agents using PageRank and structural parsing.",
+  "type": "module",
+  "bin": "./src/cli.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phuonglt/hss-ce.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "codebase-indexer",
+    "pagerank",
+    "ai-agents",
+    "context-engine"
+  ],
+  "author": "Phuong LT",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/phuonglt/hss-ce/issues"
+  },
+  "homepage": "https://github.com/phuonglt/hss-ce#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.4.0"
+  }
+}
