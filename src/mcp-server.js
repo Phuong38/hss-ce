@@ -119,6 +119,14 @@ export async function runMcpServer(dbPath, rootDir) {
               }
             }
           }
+        },
+        {
+          name: 'get_onboarding_tour',
+          description: 'Get step-by-step codebase onboarding tour. Explains files by layer (Entrypoint, Service, Storage) and structural rank.',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
         }
       ]
     };
@@ -252,7 +260,10 @@ export async function runMcpServer(dbPath, rootDir) {
           let currentTokens = estimateTokens(output);
 
           for (const file of map) {
-            let fileOutput = `\n📄 File: [${file.path}] (Rank: ${file.pagerank.toFixed(3)})\n`;
+            let fileOutput = `\n📄 File: [${file.path}] (Rank: ${file.pagerank.toFixed(3)} | Layer: ${file.layer || 'service'})\n`;
+            if (file.summary) {
+              fileOutput += `  Summary: ${file.summary}\n`;
+            }
             if (file.symbols.length === 0) {
               fileOutput += '  (No exported symbols/routes)\n';
             } else {
@@ -349,6 +360,77 @@ export async function runMcpServer(dbPath, rootDir) {
               {
                 type: 'text',
                 text: packedOutput
+              }
+            ]
+          };
+        }
+
+        case 'get_onboarding_tour': {
+          const map = db.getSkeletonMap();
+          
+          let tour = '# HSS-CE Codebase Onboarding Tour\n\n';
+          tour += 'This tour guides you through the codebase architecture step-by-step, ordered by PageRank significance.\n\n';
+
+          const entrypoints = map.filter(f => f.layer === 'entrypoint');
+          const services = map.filter(f => f.layer === 'service');
+          const storage = map.filter(f => f.layer === 'storage');
+
+          tour += '## 1. Entrypoints & Endpoints (How the app starts / receives input)\n';
+          if (entrypoints.length === 0) tour += '* No entrypoint layer files detected.\n';
+          else {
+            entrypoints.forEach(f => {
+              tour += `### 📄 [${f.path}] (PageRank: ${f.pagerank.toFixed(3)})\n`;
+              if (f.summary) tour += `> ${f.summary}\n\n`;
+              if (f.symbols.length > 0) {
+                tour += '*Exported Symbols:*\n';
+                f.symbols.forEach(s => {
+                  tour += `- \`[${s.type.toUpperCase()}]\` \`${s.signature || s.name}\`\n`;
+                });
+                tour += '\n';
+              }
+            });
+          }
+
+          tour += '## 2. Business Logic & Services (Core operations)\n';
+          if (services.length === 0) tour += '* No service layer files detected.\n';
+          else {
+            services.slice(0, 15).forEach(f => {
+              tour += `### 📄 [${f.path}] (PageRank: ${f.pagerank.toFixed(3)})\n`;
+              if (f.summary) tour += `> ${f.summary}\n\n`;
+              if (f.symbols.length > 0) {
+                tour += '*Exported Symbols:*\n';
+                f.symbols.forEach(s => {
+                  tour += `- \`[${s.type.toUpperCase()}]\` \`${s.signature || s.name}\`\n`;
+                });
+                tour += '\n';
+              }
+            });
+            if (services.length > 15) {
+              tour += `*And ${services.length - 15} other service files...*\n\n`;
+            }
+          }
+
+          tour += '## 3. Data & Storage (Persistence & Models)\n';
+          if (storage.length === 0) tour += '* No storage layer files detected.\n';
+          else {
+            storage.forEach(f => {
+              tour += `### 📄 [${f.path}] (PageRank: ${f.pagerank.toFixed(3)})\n`;
+              if (f.summary) tour += `> ${f.summary}\n\n`;
+              if (f.symbols.length > 0) {
+                tour += '*Exported Symbols:*\n';
+                f.symbols.forEach(s => {
+                  tour += `- \`[${s.type.toUpperCase()}]\` \`${s.signature || s.name}\`\n`;
+                });
+                tour += '\n';
+              }
+            });
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: tour
               }
             ]
           };

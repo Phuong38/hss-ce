@@ -135,6 +135,17 @@
     .rank-badge.mid { background: rgba(251, 191, 36, 0.1); color: var(--warning); }
     .rank-badge.low { background: rgba(255, 255, 255, 0.05); color: var(--text-muted); }
 
+    .layer-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .layer-badge.entrypoint { background: rgba(244, 63, 94, 0.15); color: #fda4af; }
+    .layer-badge.service { background: rgba(56, 189, 248, 0.15); color: #7dd3fc; }
+    .layer-badge.storage { background: rgba(52, 211, 153, 0.15); color: #a7f3d0; }
+
     .graph-panel {
       display: flex;
       flex-direction: column;
@@ -207,8 +218,11 @@
   <div class="layout">
     <div class="panel">
       <div class="panel-header">
-        <span>Files (PageRank Ordered)</span>
+        <span>Files</span>
         <span style="font-size:0.75rem;color:var(--text-muted);" id="file-count">0</span>
+      </div>
+      <div style="padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+        <input type="text" id="search-box" placeholder="Search files or symbols..." style="width: 100%; padding: 0.5rem 0.75rem; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-main); font-family: var(--font-sans); font-size: 0.85rem;" oninput="filterFiles()" />
       </div>
       <div class="scrollable" id="files-list"></div>
     </div>
@@ -233,18 +247,27 @@
   </div>
 
   <script>
-    const data = [{"path":"src/db.js","pagerank":1,"symbols":[{"name":"CodeDatabase","type":"class","signature":"class CodeDatabase"}]},{"path":"src/indexer.js","pagerank":1,"symbols":[{"name":"CodeIndexer","type":"class","signature":"class CodeIndexer"}]},{"path":"src/pagerank.js","pagerank":0.971821599400185,"symbols":[{"name":"calculatePageRank","type":"function","signature":"function calculatePageRank(files, dependencies, iterations = 20, d = 0.85)"}]},{"path":"src/parser.js","pagerank":0.971821599400185,"symbols":[{"name":"getLineNumber","type":"function","signature":"function getLineNumber(content, index)"},{"name":"parseFile","type":"function","signature":"function parseFile(filePath)"},{"name":"parseJS","type":"function","signature":"function parseJS(content, symbols, imports)"},{"name":"parsePython","type":"function","signature":"function parsePython(content, symbols, imports)"}]},{"path":"src/mcp-server.js","pagerank":0.7017543859550904,"symbols":[{"name":"runMcpServer","type":"function","signature":"function runMcpServer(dbPath, rootDir)"}]},{"path":"src/cli.js","pagerank":0.5468215994299773,"symbols":[{"name":"printUsage","type":"function","signature":"function printUsage()"},{"name":"formatSkeletonMap","type":"function","signature":"function formatSkeletonMap(map)"}]}];
+    const data = [{"path":"src/db.js","pagerank":1,"layer":"storage","summary":null,"symbols":[{"name":"CodeDatabase","type":"class","signature":"class CodeDatabase"}]},{"path":"src/indexer.js","pagerank":1,"layer":"service","summary":null,"symbols":[{"name":"CodeIndexer","type":"class","signature":"class CodeIndexer"}]},{"path":"src/pagerank.js","pagerank":0.971821599458561,"layer":"service","summary":null,"symbols":[{"name":"calculatePageRank","type":"function","signature":"function calculatePageRank(files, dependencies, iterations = 20, d = 0.85, personalization = null, gitWeights = null)"}]},{"path":"src/parser.js","pagerank":0.971821599458561,"layer":"service","summary":null,"symbols":[{"name":"getLineNumber","type":"function","signature":"function getLineNumber(content, index)"},{"name":"parseFile","type":"function","signature":"function parseFile(filePath)"},{"name":"parseJS","type":"function","signature":"function parseJS(content, symbols, imports)"},{"name":"parsePython","type":"function","signature":"function parsePython(content, symbols, imports)"},{"name":"determineLayer","type":"function","signature":"function determineLayer(filePath, symbols = [])"}]},{"path":"src/mcp-server.js","pagerank":0.7017543859681328,"layer":"service","summary":null,"symbols":[{"name":"runMcpServer","type":"function","signature":"function runMcpServer(dbPath, rootDir)"},{"name":"makeSafeId","type":"function","signature":"const makeSafeId = (p) => ..."},{"name":"estimateTokens","type":"function","signature":"const estimateTokens = (str) => ..."},{"name":"estimateTokens","type":"function","signature":"const estimateTokens = (str) => ..."},{"name":"redactSecrets","type":"function","signature":"const redactSecrets = (content) => ..."}]},{"path":"src/integrate.js","pagerank":0.6777712779533026,"layer":"service","summary":null,"symbols":[{"name":"askQuestion","type":"function","signature":"const askQuestion = (query) => ..."},{"name":"ensureDir","type":"function","signature":"function ensureDir(dir)"},{"name":"writeOrAppend","type":"function","signature":"function writeOrAppend(filePath, content)"},{"name":"generateAgentRules","type":"function","signature":"function generateAgentRules(targetProject, cliPath)"},{"name":"main","type":"function","signature":"function main()"}]},{"path":"src/cli.js","pagerank":0.5468215994577311,"layer":"entrypoint","summary":null,"symbols":[{"name":"makeSafeId","type":"function","signature":"const makeSafeId = (p) => ..."},{"name":"generateMermaidGraph","type":"function","signature":"function generateMermaidGraph(deps, isMarkdown = false)"},{"name":"generateLayeredMermaidGraph","type":"function","signature":"function generateLayeredMermaidGraph(deps, map, isMarkdown = false)"},{"name":"estimateTokens","type":"function","signature":"function estimateTokens(str)"},{"name":"redactSecrets","type":"function","signature":"function redactSecrets(content)"},{"name":"formatCompactMap","type":"function","signature":"function formatCompactMap(map, tokenBudget)"},{"name":"filterFiles","type":"function","signature":"function filterFiles()"},{"name":"highlightNodeInSvg","type":"function","signature":"function highlightNodeInSvg(filePath)"},{"name":"selectFile","type":"function","signature":"function selectFile(index)"},{"name":"printUsage","type":"function","signature":"function printUsage()"},{"name":"formatSkeletonMap","type":"function","signature":"function formatSkeletonMap(map)"}]},{"path":"src/enrich.js","pagerank":0.3229616454707087,"layer":"service","summary":null,"symbols":[{"name":"enrichCodebase","type":"function","signature":"function enrichCodebase(db, rootDir, apiKey, force = false)"}]}];
     const mermaidDef = `graph TD
-  src_cli_js["src/cli.js"]
-  src_db_js["src/db.js"]
-  src_indexer_js["src/indexer.js"]
-  src_mcp_server_js["src/mcp-server.js"]
-  src_parser_js["src/parser.js"]
-  src_pagerank_js["src/pagerank.js"]
+  subgraph Entrypoints
+    src_cli_js["src/cli.js"]
+  end
+  subgraph Services
+    src_indexer_js["src/indexer.js"]
+    src_pagerank_js["src/pagerank.js"]
+    src_parser_js["src/parser.js"]
+    src_mcp_server_js["src/mcp-server.js"]
+    src_integrate_js["src/integrate.js"]
+    src_enrich_js["src/enrich.js"]
+  end
+  subgraph Storage
+    src_db_js["src/db.js"]
+  end
   src_cli_js -->|"CodeDatabase"| src_db_js
   src_cli_js -->|"CodeIndexer"| src_indexer_js
   src_cli_js -->|"runMcpServer"| src_mcp_server_js
   src_indexer_js -->|"parseFile"| src_parser_js
+  src_indexer_js -->|"determineLayer"| src_parser_js
   src_indexer_js -->|"calculatePageRank"| src_pagerank_js
   src_mcp_server_js -->|"CodeDatabase"| src_db_js
   src_mcp_server_js -->|"CodeIndexer"| src_indexer_js
@@ -254,10 +277,11 @@
     document.getElementById('root-path').textContent = rootPath;
     document.getElementById('file-count').textContent = data.length + ' files';
 
+    mermaid.initialize({ maxTextSize: 1000000, startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
     const target = document.getElementById('mermaid-target');
     target.textContent = mermaidDef;
     target.className = 'mermaid';
-    mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
+    
     mermaid.run().then(() => {
       const svgElement = document.querySelector('#mermaid-target svg');
       if (svgElement) {
@@ -271,6 +295,20 @@
           center: true,
           minZoom: 0.1,
           maxZoom: 10
+        });
+
+        // Add node click listeners
+        svgElement.querySelectorAll('.node').forEach(nodeEl => {
+          nodeEl.style.cursor = 'pointer';
+          nodeEl.addEventListener('click', () => {
+            const idAttr = nodeEl.id || '';
+            const match = idAttr.match(/flowchart-([a-zA-Z0-9_]+)/) || idAttr.match(/([a-zA-Z0-9_]+)/);
+            const nodeId = match ? match[1] : '';
+            const foundIndex = data.findIndex(f => f.path.replace(/[^a-zA-Z0-9]/g, '_') === nodeId);
+            if (foundIndex !== -1) {
+              selectFile(foundIndex);
+            }
+          });
         });
       }
     }).catch(err => console.error(err));
@@ -295,10 +333,66 @@
       listContainer.appendChild(card);
     });
 
+    function filterFiles() {
+      const query = document.getElementById('search-box').value.toLowerCase();
+      const cards = document.querySelectorAll('.file-card');
+      cards.forEach((card, idx) => {
+        const file = data[idx];
+        const matchPath = file.path.toLowerCase().includes(query);
+        const matchSym = file.symbols.some(s => s.name.toLowerCase().includes(query));
+        if (matchPath || matchSym) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    }
+
+    function highlightNodeInSvg(filePath) {
+      const safeId = filePath.replace(/[^a-zA-Z0-9]/g, '_');
+      const svg = document.querySelector('#mermaid-target svg');
+      if (!svg) return;
+
+      // Reset all nodes and edges opacity
+      svg.querySelectorAll('.node').forEach(el => el.style.opacity = '0.3');
+      svg.querySelectorAll('.edgePath').forEach(el => el.style.opacity = '0.1');
+      svg.querySelectorAll('.edgeLabel').forEach(el => el.style.opacity = '0.1');
+
+      // Find clicked node
+      const nodeEl = svg.querySelector(`.node[id*="${safeId}"]`) || svg.querySelector(`[id^="${safeId}"]`);
+      if (nodeEl) {
+        nodeEl.style.opacity = '1';
+        
+        svg.querySelectorAll('.edgePath').forEach(el => {
+          const classList = el.className.baseVal || '';
+          if (classList.includes(safeId)) {
+            el.style.opacity = '1';
+            const classes = classList.split(' ');
+            classes.forEach(cls => {
+              if (cls.startsWith('LS-') || cls.startsWith('LE-')) {
+                const targetNodeId = cls.slice(3);
+                const connectedNode = svg.querySelector(`.node[id*="${targetNodeId}"]`);
+                if (connectedNode) {
+                  connectedNode.style.opacity = '0.8';
+                }
+              }
+            });
+          }
+        });
+      } else {
+        svg.querySelectorAll('.node').forEach(el => el.style.opacity = '1');
+        svg.querySelectorAll('.edgePath').forEach(el => el.style.opacity = '1');
+        svg.querySelectorAll('.edgeLabel').forEach(el => el.style.opacity = '1');
+      }
+    }
+
     function selectFile(index) {
       const cards = document.querySelectorAll('.file-card');
       cards.forEach((c, idx) => {
-        if (idx === index) c.classList.add('active');
+        if (idx === index) {
+          c.classList.add('active');
+          c.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
         else c.classList.remove('active');
       });
 
@@ -310,7 +404,11 @@
       titleSec.className = 'detail-section';
       titleSec.innerHTML = `
         <h2 style="font-size:1.1rem;margin-bottom:0.25rem;word-break:break-all;">${file.path}</h2>
-        <span style="font-size:0.75rem;color:var(--text-muted);">PageRank Rank: ${file.pagerank.toFixed(4)}</span>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin:0.5rem 0;">
+          <span class="layer-badge ${file.layer}">${file.layer.toUpperCase()}</span>
+          <span style="font-size:0.75rem;color:var(--text-muted);">PageRank: ${file.pagerank.toFixed(4)}</span>
+        </div>
+        ${file.summary ? \`<p style="font-size:0.85rem;color:var(--text-main);line-height:1.4;background:rgba(255,255,255,0.02);padding:0.75rem;border-radius:6px;border:1px solid var(--border-color);margin-top:0.5rem;">${file.summary}</p>\` : ''}
       `;
       detailsContainer.appendChild(titleSec);
 
@@ -331,12 +429,14 @@
               <span class="symbol-type ${typeClass}">${sym.type}</span>
               <strong style="color:var(--text-main)">${sym.name}</strong>
             </div>
-            ${sym.signature ? `<div class="symbol-sig">${sym.signature}</div>` : ''}
+            ${sym.signature ? \`<div class="symbol-sig">${sym.signature}</div>\` : ''}
           `;
           symSec.appendChild(item);
         });
       }
       detailsContainer.appendChild(symSec);
+
+      highlightNodeInSvg(file.path);
     }
   </script>
 </body>

@@ -30,6 +30,48 @@ function generateMermaidGraph(deps, isMarkdown = false) {
   return mermaid;
 }
 
+function generateLayeredMermaidGraph(deps, map, isMarkdown = false) {
+  let mermaid = isMarkdown ? "```mermaid\ngraph TD\n" : "graph TD\n";
+  if (deps.length === 0) {
+    mermaid += "  NoDependencies[No dependencies found]\n";
+  } else {
+    const entrypoints = map.filter(f => f.layer === 'entrypoint');
+    const services = map.filter(f => f.layer === 'service');
+    const storage = map.filter(f => f.layer === 'storage');
+
+    if (entrypoints.length > 0) {
+      mermaid += "  subgraph Entrypoints\n";
+      entrypoints.forEach(f => {
+        mermaid += `    ${makeSafeId(f.path)}["${f.path}"]\n`;
+      });
+      mermaid += "  end\n";
+    }
+
+    if (services.length > 0) {
+      mermaid += "  subgraph Services\n";
+      services.forEach(f => {
+        mermaid += `    ${makeSafeId(f.path)}["${f.path}"]\n`;
+      });
+      mermaid += "  end\n";
+    }
+
+    if (storage.length > 0) {
+      mermaid += "  subgraph Storage\n";
+      storage.forEach(f => {
+        mermaid += `    ${makeSafeId(f.path)}["${f.path}"]\n`;
+      });
+      mermaid += "  end\n";
+    }
+
+    deps.forEach(d => {
+      const cleanSymbol = d.symbol.replace(/"/g, "'").replace(/[^\w-]/g, '_');
+      mermaid += `  ${makeSafeId(d.from_file)} -->|"${cleanSymbol}"| ${makeSafeId(d.to_file)}\n`;
+    });
+  }
+  if (isMarkdown) mermaid += "```\n";
+  return mermaid;
+}
+
 function estimateTokens(str) {
   return Math.ceil(str.length / 4);
 }
@@ -72,7 +114,10 @@ function formatCompactMap(map, tokenBudget) {
   let currentTokens = estimateTokens(output);
 
   for (const file of map) {
-    let fileOutput = `\n📄 File: [${file.path}] (Rank: ${file.pagerank.toFixed(3)})\n`;
+    let fileOutput = `\n📄 File: [${file.path}] (Rank: ${file.pagerank.toFixed(3)} | Layer: ${file.layer || 'service'})\n`;
+    if (file.summary) {
+      fileOutput += `  Summary: ${file.summary}\n`;
+    }
     if (file.symbols.length === 0) {
       fileOutput += '  (No exported symbols/routes)\n';
     } else {
@@ -200,12 +245,15 @@ try {
       }
       
       // 1. Generate standard markdown Mermaid block for README.md
-      const mermaid = generateMermaidGraph(deps, true);
+      const mermaid = generateLayeredMermaidGraph(deps, map, true);
 
       let fileDescriptions = "";
       map.forEach(file => {
         fileDescriptions += `### [${file.path}](file:///${path.join(rootDir, file.path)})\n`;
-        fileDescriptions += `* **Rank:** ${file.pagerank.toFixed(3)}\n`;
+        fileDescriptions += `* **Rank:** ${file.pagerank.toFixed(3)} | **Layer:** ${file.layer || 'service'}\n`;
+        if (file.summary) {
+          fileDescriptions += `* **Summary:** ${file.summary}\n`;
+        }
         if (file.symbols.length > 0) {
           fileDescriptions += `* **Symbols:**\n`;
           file.symbols.forEach(sym => {
@@ -242,12 +290,12 @@ node src/cli.js mcp .
 \`\`\`
 `;
 
-      const docPath = path.join(rootDir, 'README.md');
+      const docPath = path.join(rootDir, 'CODEBASE.md');
       fs.writeFileSync(docPath, docContent);
       console.log(`Documentation generated at: ${docPath}`);
 
       // 2. Generate interactive HTML architecture explorer
-      const rawMermaidDef = generateMermaidGraph(deps, false);
+      const rawMermaidDef = generateLayeredMermaidGraph(deps, map, false);
 
       const htmlTemplate = `<!DOCTYPE html>
 <html lang="en">
@@ -386,6 +434,17 @@ node src/cli.js mcp .
     .rank-badge.mid { background: rgba(251, 191, 36, 0.1); color: var(--warning); }
     .rank-badge.low { background: rgba(255, 255, 255, 0.05); color: var(--text-muted); }
 
+    .layer-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .layer-badge.entrypoint { background: rgba(244, 63, 94, 0.15); color: #fda4af; }
+    .layer-badge.service { background: rgba(56, 189, 248, 0.15); color: #7dd3fc; }
+    .layer-badge.storage { background: rgba(52, 211, 153, 0.15); color: #a7f3d0; }
+
     .graph-panel {
       display: flex;
       flex-direction: column;
@@ -458,8 +517,11 @@ node src/cli.js mcp .
   <div class="layout">
     <div class="panel">
       <div class="panel-header">
-        <span>Files (PageRank Ordered)</span>
+        <span>Files</span>
         <span style="font-size:0.75rem;color:var(--text-muted);" id="file-count">0</span>
+      </div>
+      <div style="padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+        <input type="text" id="search-box" placeholder="Search files or symbols..." style="width: 100%; padding: 0.5rem 0.75rem; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-main); font-family: var(--font-sans); font-size: 0.85rem;" oninput="filterFiles()" />
       </div>
       <div class="scrollable" id="files-list"></div>
     </div>
@@ -495,6 +557,7 @@ node src/cli.js mcp .
     const target = document.getElementById('mermaid-target');
     target.textContent = mermaidDef;
     target.className = 'mermaid';
+    
     mermaid.run().then(() => {
       const svgElement = document.querySelector('#mermaid-target svg');
       if (svgElement) {
@@ -508,6 +571,20 @@ node src/cli.js mcp .
           center: true,
           minZoom: 0.1,
           maxZoom: 10
+        });
+
+        // Add node click listeners
+        svgElement.querySelectorAll('.node').forEach(nodeEl => {
+          nodeEl.style.cursor = 'pointer';
+          nodeEl.addEventListener('click', () => {
+            const idAttr = nodeEl.id || '';
+            const match = idAttr.match(/flowchart-([a-zA-Z0-9_]+)/) || idAttr.match(/([a-zA-Z0-9_]+)/);
+            const nodeId = match ? match[1] : '';
+            const foundIndex = data.findIndex(f => f.path.replace(/[^a-zA-Z0-9]/g, '_') === nodeId);
+            if (foundIndex !== -1) {
+              selectFile(foundIndex);
+            }
+          });
         });
       }
     }).catch(err => console.error(err));
@@ -532,10 +609,66 @@ node src/cli.js mcp .
       listContainer.appendChild(card);
     });
 
+    function filterFiles() {
+      const query = document.getElementById('search-box').value.toLowerCase();
+      const cards = document.querySelectorAll('.file-card');
+      cards.forEach((card, idx) => {
+        const file = data[idx];
+        const matchPath = file.path.toLowerCase().includes(query);
+        const matchSym = file.symbols.some(s => s.name.toLowerCase().includes(query));
+        if (matchPath || matchSym) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    }
+
+    function highlightNodeInSvg(filePath) {
+      const safeId = filePath.replace(/[^a-zA-Z0-9]/g, '_');
+      const svg = document.querySelector('#mermaid-target svg');
+      if (!svg) return;
+
+      // Reset all nodes and edges opacity
+      svg.querySelectorAll('.node').forEach(el => el.style.opacity = '0.3');
+      svg.querySelectorAll('.edgePath').forEach(el => el.style.opacity = '0.1');
+      svg.querySelectorAll('.edgeLabel').forEach(el => el.style.opacity = '0.1');
+
+      // Find clicked node
+      const nodeEl = svg.querySelector(\`.node[id*="\${safeId}"]\`) || svg.querySelector(\`[id^="\${safeId}"]\`);
+      if (nodeEl) {
+        nodeEl.style.opacity = '1';
+        
+        svg.querySelectorAll('.edgePath').forEach(el => {
+          const classList = el.className.baseVal || '';
+          if (classList.includes(safeId)) {
+            el.style.opacity = '1';
+            const classes = classList.split(' ');
+            classes.forEach(cls => {
+              if (cls.startsWith('LS-') || cls.startsWith('LE-')) {
+                const targetNodeId = cls.slice(3);
+                const connectedNode = svg.querySelector(\`.node[id*="\${targetNodeId}"]\`);
+                if (connectedNode) {
+                  connectedNode.style.opacity = '0.8';
+                }
+              }
+            });
+          }
+        });
+      } else {
+        svg.querySelectorAll('.node').forEach(el => el.style.opacity = '1');
+        svg.querySelectorAll('.edgePath').forEach(el => el.style.opacity = '1');
+        svg.querySelectorAll('.edgeLabel').forEach(el => el.style.opacity = '1');
+      }
+    }
+
     function selectFile(index) {
       const cards = document.querySelectorAll('.file-card');
       cards.forEach((c, idx) => {
-        if (idx === index) c.classList.add('active');
+        if (idx === index) {
+          c.classList.add('active');
+          c.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
         else c.classList.remove('active');
       });
 
@@ -547,7 +680,11 @@ node src/cli.js mcp .
       titleSec.className = 'detail-section';
       titleSec.innerHTML = \`
         <h2 style="font-size:1.1rem;margin-bottom:0.25rem;word-break:break-all;">\${file.path}</h2>
-        <span style="font-size:0.75rem;color:var(--text-muted);">PageRank Rank: \${file.pagerank.toFixed(4)}</span>
+        <div style="display:flex;gap:0.5rem;align-items:center;margin:0.5rem 0;">
+          <span class="layer-badge \${file.layer}">\${file.layer.toUpperCase()}</span>
+          <span style="font-size:0.75rem;color:var(--text-muted);">PageRank: \${file.pagerank.toFixed(4)}</span>
+        </div>
+        \${file.summary ? \\\`<p style="font-size:0.85rem;color:var(--text-main);line-height:1.4;background:rgba(255,255,255,0.02);padding:0.75rem;border-radius:6px;border:1px solid var(--border-color);margin-top:0.5rem;">\${file.summary}</p>\\\` : ''}
       \`;
       detailsContainer.appendChild(titleSec);
 
@@ -568,12 +705,14 @@ node src/cli.js mcp .
               <span class="symbol-type \${typeClass}">\${sym.type}</span>
               <strong style="color:var(--text-main)">\${sym.name}</strong>
             </div>
-            \${sym.signature ? \`<div class="symbol-sig">\${sym.signature}</div>\` : ''}
+            \${sym.signature ? \\\`<div class="symbol-sig">\${sym.signature}</div>\\\` : ''}
           \`;
           symSec.appendChild(item);
         });
       }
       detailsContainer.appendChild(symSec);
+
+      highlightNodeInSvg(file.path);
     }
   </script>
 </body>
@@ -583,6 +722,77 @@ node src/cli.js mcp .
       const htmlPath = path.join(rootDir, 'architecture.html');
       fs.writeFileSync(htmlPath, htmlTemplate);
       console.log(`HTML Dashboard generated at: ${htmlPath}`);
+      break;
+    }
+
+    case 'enrich': {
+      const db = new CodeDatabase(dbPath);
+      const forceEnrich = args.includes('--force');
+      const apiKey = process.env.GEMINI_API_KEY || args.find(a => a.startsWith('--key='))?.split('=')[1];
+      if (!apiKey) {
+        console.error('Error: GEMINI_API_KEY environment variable is not set. Use --key=<api_key> flag.');
+        process.exit(1);
+      }
+      const { enrichCodebase } = await import('./enrich.js');
+      await enrichCodebase(db, rootDir, apiKey, forceEnrich);
+      break;
+    }
+
+    case 'tour': {
+      const db = new CodeDatabase(dbPath);
+      const map = db.getSkeletonMap();
+      
+      console.log('# HSS-CE Codebase Onboarding Tour\n');
+      console.log('This tour guides you through the codebase architecture step-by-step, ordered by PageRank significance.\n');
+
+      const entrypoints = map.filter(f => f.layer === 'entrypoint');
+      const services = map.filter(f => f.layer === 'service');
+      const storage = map.filter(f => f.layer === 'storage');
+
+      console.log('## 1. Entrypoints & Endpoints (How the app starts / receives input)');
+      if (entrypoints.length === 0) console.log('* No entrypoint layer files detected.');
+      else {
+        entrypoints.forEach(f => {
+          console.log(`### 📄 [${f.path}](file:///${path.join(rootDir, f.path)}) (PageRank: ${f.pagerank.toFixed(3)})`);
+          if (f.summary) console.log(`> ${f.summary}\n`);
+          if (f.symbols.length > 0) {
+            console.log('*Exported Symbols:*');
+            f.symbols.forEach(s => console.log(`- \`[${s.type.toUpperCase()}]\` \`${s.signature || s.name}\``));
+            console.log('');
+          }
+        });
+      }
+
+      console.log('## 2. Business Logic & Services (Core operations)');
+      if (services.length === 0) console.log('* No service layer files detected.');
+      else {
+        services.slice(0, 15).forEach(f => {
+          console.log(`### 📄 [${f.path}](file:///${path.join(rootDir, f.path)}) (PageRank: ${f.pagerank.toFixed(3)})`);
+          if (f.summary) console.log(`> ${f.summary}\n`);
+          if (f.symbols.length > 0) {
+            console.log('*Exported Symbols:*');
+            f.symbols.forEach(s => console.log(`- \`[${s.type.toUpperCase()}]\` \`${s.signature || s.name}\``));
+            console.log('');
+          }
+        });
+        if (services.length > 15) {
+          console.log(`*And ${services.length - 15} other service files...*\n`);
+        }
+      }
+
+      console.log('## 3. Data & Storage (Persistence & Models)');
+      if (storage.length === 0) console.log('* No storage layer files detected.');
+      else {
+        storage.forEach(f => {
+          console.log(`### 📄 [${f.path}](file:///${path.join(rootDir, f.path)}) (PageRank: ${f.pagerank.toFixed(3)})`);
+          if (f.summary) console.log(`> ${f.summary}\n`);
+          if (f.symbols.length > 0) {
+            console.log('*Exported Symbols:*');
+            f.symbols.forEach(s => console.log(`- \`[${s.type.toUpperCase()}]\` \`${s.signature || s.name}\``));
+            console.log('');
+          }
+        });
+      }
       break;
     }
 
@@ -652,6 +862,9 @@ Commands:
   doc <path>               Generate README.md documentation with Mermaid graph.
   pack <path>              Pack files into structured XML under a token budget.
                            Flags: --budget=1000, --output=file.txt
+  enrich <path>            Enrich codebase index with AI-generated summaries.
+                           Flags: --key=api_key (or set GEMINI_API_KEY), --force
+  tour <path>              Generate step-by-step codebase onboarding tour.
   mcp <path>               Start MCP server (stdio transport).
 `);
 }
@@ -659,7 +872,10 @@ Commands:
 function formatSkeletonMap(map) {
   let output = '=== CODEBASE SKELETON MAP (PageRank Ordered) ===\n';
   for (const file of map) {
-    output += `\n📄 File: [${file.path}] (Rank: ${file.pagerank.toFixed(3)})\n`;
+    output += `\n📄 File: [${file.path}] (Rank: ${file.pagerank.toFixed(3)} | Layer: ${file.layer || 'service'})\n`;
+    if (file.summary) {
+      output += `  Summary: ${file.summary}\n`;
+    }
     if (file.symbols.length === 0) {
       output += '  (No exported symbols/routes)\n';
     } else {

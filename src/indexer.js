@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
-import { parseFile } from './parser.js';
+import { parseFile, determineLayer } from './parser.js';
 import { calculatePageRank } from './pagerank.js';
 
 export class CodeIndexer {
@@ -131,10 +131,11 @@ export class CodeIndexer {
         parsedCount++;
         // Clear previous state of the file
         this.db.clearFileSymbolsAndDependencies(relativePath);
-        this.db.saveFile(relativePath, currentHash);
 
         try {
           const { symbols, imports } = parseFile(filePath);
+          const layer = determineLayer(relativePath, symbols);
+          this.db.saveFile(relativePath, currentHash, layer);
           
           // Save symbols
           for (const sym of symbols) {
@@ -151,6 +152,7 @@ export class CodeIndexer {
           rawImportsMap.set(relativePath, imports);
         } catch (e) {
           console.error(`Error parsing file ${relativePath}:`, e.message);
+          this.db.saveFile(relativePath, currentHash, 'service');
         }
       } else {
         skippedCount++;

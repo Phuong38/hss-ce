@@ -47,7 +47,8 @@ function generateAgentRules(targetProject, cliPath) {
 This project has an active HSS-CE indexer database at \`.hss-ce/graph.db\`.
 
 Rules:
-- Before resolving complex changes or doing codebase mapping, check the map: \`node ${cliPath} map .\` to view PageRank importance and skeleton map of codebase.
+- Before resolving complex changes or doing codebase mapping, check the map: \`node ${cliPath} map .\` to view PageRank importance, layers, and summaries.
+- Run onboarding tour: \`node ${cliPath} tour .\` or use the MCP tool \`get_onboarding_tour\` to understand codebase layers (Entrypoints, Services, Storage) step-by-step.
 - When searching for symbol definitions or callers, prefer running CLI query: \`node ${cliPath} query . <symbol>\` or using the MCP tool \`get_definition\` / \`get_callers\` rather than using raw \`grep\`.
 - When modifying code files, keep the graph updated by running \`node ${cliPath} index .\` and generate docs with \`node ${cliPath} doc .\`.
 `;
@@ -60,7 +61,7 @@ Rules:
   const workflowsPath = path.join(workflowsDir, 'hss-ce.md');
   const workflowsContent = `---
 name: hss-ce
-description: Run codebase indexing, query, or document generation using HSS-CE
+description: Run codebase indexing, query, onboarding tour, or document generation using HSS-CE
 ---
 
 # Workflow: hss-ce
@@ -71,17 +72,25 @@ Follow these instructions to run HSS-CE tasks:
    \`\`\`sh
    node ${cliPath} index .
    \`\`\`
-2. **Generate Architecture Diagrams & Documentation:**
+2. **Generate Onboarding Tour:**
+   \`\`\`sh
+   node ${cliPath} tour .
+   \`\`\`
+3. **Generate Architecture Diagrams & Documentation:**
    \`\`\`sh
    node ${cliPath} doc .
    \`\`\`
-3. **Query Code Skeleton Map:**
+4. **Query Code Skeleton Map:**
    \`\`\`sh
    node ${cliPath} map .
    \`\`\`
-4. **Lookup Symbol Definition & Callers:**
+5. **Lookup Symbol Definition & Callers:**
    \`\`\`sh
    node ${cliPath} query . <symbol>
+   \`\`\`
+6. **Enrich Codebase with AI Summaries:**
+   \`\`\`sh
+   GEMINI_API_KEY="your_api_key" node ${cliPath} enrich .
    \`\`\`
 `;
   fs.writeFileSync(workflowsPath, workflowsContent, 'utf-8');
@@ -91,8 +100,9 @@ Follow these instructions to run HSS-CE tasks:
   const cursorRulesPath = path.join(targetProject, '.cursorrules');
   const cursorRulesContent = `
 # HSS-CE Rules for Cursor
-- Use HSS-CE MCP tools (\`get_skeleton\`, \`get_definition\`, \`get_callers\`, \`get_routes\`, \`get_compact_map\`, \`pack_context\`) to explore the codebase and gather structural context.
-- To view codebase importance, run: \`node ${cliPath} map . --compact --budget=1000\`
+- Use HSS-CE MCP tools (\`get_skeleton\`, \`get_definition\`, \`get_callers\`, \`get_routes\`, \`get_compact_map\`, \`pack_context\`, \`get_onboarding_tour\`) to explore the codebase and gather structural context.
+- To view codebase onboarding tour, run: \`node ${cliPath} tour .\`
+- To view codebase importance and layers, run: \`node ${cliPath} map . --compact --budget=1000\`
 - To search symbols: \`node ${cliPath} query . <symbol>\`
 - Keep index updated: \`node ${cliPath} index .\` after edits.
 `;
@@ -102,9 +112,10 @@ Follow these instructions to run HSS-CE tasks:
   const claudePath = path.join(targetProject, 'CLAUDE.md');
   const claudeContent = `
 # HSS-CE instructions for Claude Code
-- Use the HSS-CE MCP server tools to search and gather structural context for functions/classes.
+- Use the HSS-CE MCP server tools (including \`get_onboarding_tour\`) to search and gather structural context for functions/classes.
+- To understand the project structure, run the onboarding tour: \`node ${cliPath} tour .\`
 - Keep the index updated: \`node ${cliPath} index .\` after edits.
-- Use \`node ${cliPath} map .\` for structural visualization of codebase.
+- Use \`node \${cliPath} map .\` for structural visualization of codebase.
 `;
   writeOrAppend(claudePath, claudeContent);
 

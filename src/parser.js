@@ -195,3 +195,48 @@ function parsePython(content, symbols, imports) {
     });
   }
 }
+
+export function determineLayer(filePath, symbols = []) {
+  const normPath = filePath.toLowerCase().replace(/\\/g, '/');
+  const baseName = path.basename(normPath);
+
+  // 1. Entrypoint classification
+  if (
+    baseName === 'cli.js' || 
+    baseName === 'cli.ts' || 
+    baseName === 'main.py' || 
+    baseName === 'app.js' || 
+    baseName === 'app.ts' || 
+    baseName === 'server.js' || 
+    baseName === 'server.ts' || 
+    normPath.includes('/routes/') ||
+    normPath.includes('/controllers/') ||
+    normPath.includes('/api/') ||
+    symbols.some(s => s.type === 'route')
+  ) {
+    return 'entrypoint';
+  }
+
+  // 2. Storage classification
+  if (
+    normPath.includes('/db/') ||
+    normPath.includes('/database/') ||
+    normPath.includes('/models/') ||
+    normPath.includes('/schemas/') ||
+    baseName.includes('db.') ||
+    baseName.includes('database.') ||
+    baseName.includes('schema.') ||
+    baseName.includes('model.') ||
+    normPath.includes('sqlite') ||
+    normPath.includes('postgres') ||
+    normPath.includes('mongo') ||
+    baseName === 'prisma.ts' ||
+    baseName === 'schema.prisma'
+  ) {
+    return 'storage';
+  }
+
+  // 3. Logic/Service classification
+  return 'service';
+}
+

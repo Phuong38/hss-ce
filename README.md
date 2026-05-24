@@ -8,9 +8,11 @@ HSS-CE is a lightweight codebase indexer and Model Context Protocol (MCP) server
 
 1. **PageRank Relevance Engine:** Ranks codebase files structurally based on import and dependency counts, giving LLMs a clear directory map.
 2. **Git Commit Weighting:** Integrates Git commit history to boost files changed frequently or recently.
-3. **Personalized PageRank:** Boosts relevance weights dynamically around your current "active files" to focus the AI's attention locally.
-4. **Token-Budgeted Compact Maps:** Outputs symbol signature skeletons (classes, methods, routes) truncated gracefully to fit under a specified token budget (e.g. 1000 tokens).
-5. **Context Packing & Secret Guard:** Bundles multiple code files into a structured XML package under a token budget while redacting AWS, OpenAI, and Slack keys.
+3. **Personalized PageRank & Layering:** Boosts relevance weights dynamically around your current "active files" and automatically groups codebase files into **Entrypoint, Service, and Storage** layers.
+4. **Interactive Web Dashboard:** Generates an interactive, zoomable HTML diagram (`architecture.html`) where you can search nodes, highlight dependency flows, and click on nodes to see symbols and summaries.
+5. **AI-Enriched Summaries:** Enables lightweight AI-powered file summarization (stored in SQLite) via Gemini API.
+6. **Guided Onboarding Tours:** Generates step-by-step onboarding walkthroughs (`hss-ce tour`) tracing from high-rank Entrypoints down to Storage.
+7. **Token-Budgeted Compact Maps & Context Packing:** Packages symbol signatures or full codebases under token budgets with Secret Guard redaction.
 
 ---
 
@@ -109,13 +111,13 @@ mcp:
 For manual terminal usage:
 
 ```bash
-# 1. Index codebase
+# 1. Index codebase (determines files and logical layers)
 hss-ce index /path/to/project
 
 # 2. Index codebase and prioritize specific files (Personalization)
 hss-ce index /path/to/project --active=src/db.js,src/indexer.js
 
-# 3. View structural codebase map
+# 3. View structural codebase map (includes layer details)
 hss-ce map /path/to/project
 
 # 4. View a compact, elided signature-only map under a token budget
@@ -123,6 +125,13 @@ hss-ce map /path/to/project --compact --budget=1000
 
 # 5. Pack codebase files under a token budget with Secret Guard redaction
 hss-ce pack /path/to/project --budget=2000 --output=packed_context.txt
+
+# 6. Enrich codebase index with AI-generated summaries (Gemini API)
+export GEMINI_API_KEY="your_api_key_here"
+hss-ce enrich /path/to/project
+
+# 7. Generate a step-by-step onboarding tour of the codebase
+hss-ce tour /path/to/project
 ```
 
 ---
@@ -132,9 +141,9 @@ hss-ce pack /path/to/project --budget=2000 --output=packed_context.txt
 HSS-CE draws inspiration and features from several exceptional open-source tools:
 - **[Repomix](https://github.com/yamadashy/repomix) / [GitIngest](https://github.com/coderamp-labs/gitingest)**: Inspires our XML context packaging and budget-bounded file packing with token calculations.
 - **[Aider](https://github.com/Aider-AI/aider)**: Inspires our signature-only codebase skeleton mapping and token-budgeted structure elision.
-- **[Graphify](https://github.com/safishamsi/graphify)**: Inspires our structural codebase graph modeling, import tracking, and PageRank scoring.
-- **[CodeGraph](https://github.com/colbymchenry/codegraph)**: Inspires our structural codebase graph modeling, import tracking, and PageRank scoring.
+- **[Graphify](https://github.com/safishamsi/graphify)** / **[CodeGraph](https://github.com/colbymchenry/codegraph)**: Inspires our structural codebase graph modeling, import tracking, and PageRank scoring.
 - **[CodeCTX](https://github.com/tavilyai/codectx)**: Inspires our personalized context boost around user active files.
+- **[Understand-Anything](https://github.com/Lum1104/Understand-Anything)**: Inspires our logical layering (Entrypoint/Service/Storage), interactive visual dashboard highlighting, and guided onboarding tours.
 
 ---
 

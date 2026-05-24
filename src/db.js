@@ -19,9 +19,19 @@ export class CodeDatabase {
         path TEXT PRIMARY KEY,
         hash TEXT NOT NULL,
         pagerank REAL DEFAULT 1.0,
-        last_indexed INTEGER NOT NULL
+        last_indexed INTEGER NOT NULL,
+        layer TEXT DEFAULT 'service',
+        summary TEXT
       );
     `);
+
+    // Dynamically alter table for backward compatibility
+    try {
+      this.db.exec(`ALTER TABLE files ADD COLUMN layer TEXT DEFAULT 'service';`);
+    } catch (_) {}
+    try {
+      this.db.exec(`ALTER TABLE files ADD COLUMN summary TEXT;`);
+    } catch (_) {}
 
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS symbols (
@@ -52,13 +62,26 @@ export class CodeDatabase {
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_dependencies_symbol ON dependencies(symbol);`);
   }
 
-  saveFile(filePath, hash) {
+  saveFile(filePath, hash, layer = 'service', summary = null) {
     const stmt = this.db.prepare(`
-      INSERT INTO files (path, hash, last_indexed)
-      VALUES (?, ?, ?)
-      ON CONFLICT(path) DO UPDATE SET hash = excluded.hash, last_indexed = excluded.last_indexed;
+      INSERT INTO files (path, hash, last_indexed, layer, summary)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(path) DO UPDATE SET 
+        hash = excluded.hash, 
+        last_indexed = excluded.last_indexed,
+        layer = excluded.layer,
+        summary = COALESCE(excluded.summary, files.summary);
     `);
-    stmt.run(filePath, hash, Date.now());
+    stmt.run(filePath, hash, Date.now(), layer, summary);
+  }
+
+  updateFileMetadata(filePath, layer, summary) {
+    const stmt = this.db.prepare(`
+      UPDATE files 
+      SET layer = ?, summary = ?
+      WHERE path = ?;
+    `);
+    stmt.run(layer, summary, filePath);
   }
 
   deleteFile(filePath) {
@@ -128,7 +151,7 @@ export class CodeDatabase {
   }
 
   getSkeletonMap() {
-    const files = this.db.prepare(`SELECT path, pagerank FROM files ORDER BY pagerank DESC;`).all();
+    const files = this.db.prepare(`SELECT path, pagerank, layer, summary FROM files ORDER BY pagerank DESC;`).all();
     const map = [];
     for (const file of files) {
       const symbols = this.db.prepare(`
@@ -140,6 +163,8 @@ export class CodeDatabase {
       map.push({
         path: file.path,
         pagerank: file.pagerank,
+        layer: file.layer || 'service',
+        summary: file.summary || null,
         symbols: symbols.map(s => ({
           name: s.name,
           type: s.type,
