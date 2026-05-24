@@ -1,0 +1,7 @@
+.git
+.gitignore
+.hss-ce
+node_modules
+CODEBASE.md
+architecture.html
+package-lock.json
