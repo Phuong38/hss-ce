@@ -684,7 +684,7 @@ node src/cli.js mcp .
           <span class="layer-badge \${file.layer}">\${file.layer.toUpperCase()}</span>
           <span style="font-size:0.75rem;color:var(--text-muted);">PageRank: \${file.pagerank.toFixed(4)}</span>
         </div>
-        \${file.summary ? \\\`<p style="font-size:0.85rem;color:var(--text-main);line-height:1.4;background:rgba(255,255,255,0.02);padding:0.75rem;border-radius:6px;border:1px solid var(--border-color);margin-top:0.5rem;">\${file.summary}</p>\\\` : ''}
+        \${file.summary ? \`<p style="font-size:0.85rem;color:var(--text-main);line-height:1.4;background:rgba(255,255,255,0.02);padding:0.75rem;border-radius:6px;border:1px solid var(--border-color);margin-top:0.5rem;">\${file.summary}</p>\` : ''}
       \`;
       detailsContainer.appendChild(titleSec);
 
@@ -705,7 +705,7 @@ node src/cli.js mcp .
               <span class="symbol-type \${typeClass}">\${sym.type}</span>
               <strong style="color:var(--text-main)">\${sym.name}</strong>
             </div>
-            \${sym.signature ? \\\`<div class="symbol-sig">\${sym.signature}</div>\\\` : ''}
+            \${sym.signature ? \`<div class="symbol-sig">\${sym.signature}</div>\` : ''}
           \`;
           symSec.appendChild(item);
         });
