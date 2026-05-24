@@ -127,5 +127,17 @@ hss-ce pack /path/to/project --budget=2000 --output=packed_context.txt
 
 ---
 
+## Inspirations & Credits
+
+HSS-CE draws inspiration and features from several exceptional open-source tools:
+- **[Repomix](https://github.com/yamadashy/repomix) / [GitIngest](https://github.com/coderamp-labs/gitingest)**: Inspires our XML context packaging and budget-bounded file packing with token calculations.
+- **[Aider](https://github.com/Aider-AI/aider)**: Inspires our signature-only codebase skeleton mapping and token-budgeted structure elision.
+- **[Graphify](https://github.com/safishamsi/graphify)**: Inspires our structural codebase graph modeling, import tracking, and PageRank scoring.
+- **[CodeGraph](https://github.com/colbymchenry/codegraph)**: Inspires our structural codebase graph modeling, import tracking, and PageRank scoring.
+- **[CodeCTX](https://github.com/tavilyai/codectx)**: Inspires our personalized context boost around user active files.
+
+---
+
 ## License
 Licensed under the [MIT License](LICENSE).
+
