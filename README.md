@@ -52,23 +52,32 @@ Ensure you have **Node.js (v18+)** and **Git** installed on your system.
 
 ### 2. Install and Configure
 
-#### Option A: Install via NPM (Recommended)
-You can install HSS-CE globally directly from the NPM registry:
+#### Option A: Run via NPX (Recommended - No Install Needed)
+Run the configuration wizard directly without global installation issues:
+```bash
+npx hss-ce-integrate
+```
+
+#### Option B: Install via NPM (Global)
+Install globally to make the commands permanent:
 ```bash
 npm install -g hss-ce
 ```
+*Note: On macOS/Linux, if you encounter `EACCES` permission errors, either run with `sudo npm install -g hss-ce` or use a Node manager like `nvm`.*
+
 Once installed, move into your target project directory and initialize it:
 ```bash
 hss-ce-integrate
 ```
 
-#### Option B: Install from Source (Git Clone)
+#### Option C: Install from Source (Git Clone)
 If you prefer to clone and install the source code manually:
 ```bash
 git clone https://github.com/phuonglt/hss-ce.git
 cd hss-ce
 bash install.sh
 ```
+
 
 
 ### 3. What the Installer Does Automatically
