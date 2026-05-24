@@ -1,152 +1,104 @@
 # HSS-CE: Hybrid Semantic-Structural Context Engine
 
-HSS-CE is a lightweight codebase indexer and Model Context Protocol (MCP) server designed to optimize context retrieval for AI coding assistants. It calculates file significance using **PageRank** and parses symbols (classes, functions, endpoints) using high-performance regex-based parsers, ensuring your AI agents work on the most contextually relevant parts of your codebase without blowing your token budget.
+HSS-CE is a lightweight, offline-first codebase indexer and Model Context Protocol (MCP) server. It optimizes how developers and AI coding agents explore, map, and interact with complex codebases.
+
+By calculating file significance using a simplified reference-count **PageRank** and parsing code structures (classes, functions, endpoints) using high-performance regex parsers, HSS-CE provides high-density context without wasting your token budget.
 
 ---
 
-## Key Features
+## Honest Value Proposition: Why Use HSS-CE?
 
-1. **PageRank Relevance Engine:** Ranks codebase files structurally based on import and dependency counts, giving LLMs a clear directory map.
-2. **Git Commit Weighting:** Integrates Git commit history to boost files changed frequently or recently.
-3. **Personalized PageRank & Layering:** Boosts relevance weights dynamically around your current "active files" and automatically groups codebase files into **Entrypoint, Service, and Storage** layers.
-4. **Interactive Web Dashboard:** Generates an interactive, zoomable HTML diagram (`architecture.html`) where you can search nodes, highlight dependency flows, and click on nodes to see symbols and summaries.
-5. **AI-Enriched Summaries:** Enables lightweight AI-powered file summarization (stored in SQLite) via Gemini API.
-6. **Guided Onboarding Tours:** Generates step-by-step onboarding walkthroughs (`hss-ce tour`) tracing from high-rank Entrypoints down to Storage.
-7. **Token-Budgeted Compact Maps & Context Packing:** Packages symbol signatures or full codebases under token budgets with Secret Guard redaction.
+HSS-CE is **not** a magical AI assistant that writes code for you. It is a structured context provider that acts as a bridge between your codebase's architecture, yourself, and your AI tools.
+
+### 1. For Developers (Onboarding & Navigation)
+* **Interactive Architecture Map:** Generates a lightweight, dark-mode interactive HTML diagram (`architecture.html`). You can visually search files, see directory-grouped modules, and click nodes to highlight immediate dependencies or see local symbols.
+* **Onboarding Tours:** Generates step-by-step markdown walkthroughs (`hss-ce tour`) that order your codebase from critical entrypoints down to services and storage layers. This helps you understand a new codebase in minutes.
+* **100% Offline Summaries:** Automatically extracts plain-English JSDoc, block comments, and Python docstrings to construct a codebase overview database, requiring zero API keys, network requests, or costs.
+
+### 2. For AI Coding Agents (Context Optimization)
+* **Eliminate Token Waste:** Coding agents (like Claude Code, Cursor, Aider) often read entire files or directory trees to understand import flows. HSS-CE exposes an MCP server that lets agents query precise skeletal structures and dependency trees under strict token budgets.
+* **Precise Symbol Navigation:** Instead of performing noisy text searches (like raw `grep` or `ripgrep`), agents use structured database queries to resolve exact function definitions and caller locations.
+* **Automated Redaction (Secret Guard):** Before packing codebase files to send to LLM context, HSS-CE automatically redacts credentials, private keys, and API tokens, preventing security leaks.
+
+### 3. Current Limitations & What It is Not
+* **Regex-based, not AST-based:** HSS-CE uses fast, lightweight regex patterns to extract imports and symbols. While this makes it extremely fast and multi-language out-of-the-box, it may occasionally miss highly dynamic, metaprogrammed, or complex syntactical structures compared to a full abstract syntax tree (AST) compiler.
+* **Dependency on Code Quality:** Local file summaries are parsed from comments/docstrings. If your codebase has zero comments, the summaries will be empty unless you explicitly run the remote LLM enrichment command (`hss-ce enrich`).
 
 ---
 
-## Quick Start (For Beginners)
+## Developer & Agent Workflows in Action
 
-If you are new to programming or AI tools, follow these simple steps to install and set up HSS-CE.
+### A. How a Developer Uses HSS-CE
+Imagine you need to modify a database schema file `src/db.js` in a large codebase, but you don't know what might break.
+1. Open the generated `architecture.html` dashboard in your browser.
+2. Search for `db.js`.
+3. Click the `db.js` node. The graph automatically dims unrelated elements and highlights all service files that directly import it.
+4. Read the symbols and summaries in the details panel to understand exactly what functions interact with the database.
 
-### 1. Requirements
-Ensure you have **Node.js** (version 18+) and **Git** installed on your system:
-- Check Node.js: open your terminal and run `node -v`
-- Check Git: run `git --version`
+### B. How an AI Agent Uses HSS-CE (Under the Hood)
+When you ask your agent (e.g. Claude Code or Cursor): *"Find all callers of the authenticate function and tell me where it is defined"*, the agent bypasses slow search loops and makes a fast MCP tool call:
+1. Agent invokes `get_definition(symbol: "authenticate")` → HSS-CE queries SQLite and returns the exact file path and signature.
+2. Agent invokes `get_callers(symbol: "authenticate")` → HSS-CE returns a clean list of files and lines referencing the function.
+3. The agent reads only those specific files, completing the task with 90% fewer tokens and much higher accuracy.
 
-### 2. Download and Setup
-Open your terminal, navigate to the folder where you want to download HSS-CE, and run:
+---
+
+## Quick Start: Set Up a New Project (Single-Command Setup)
+
+HSS-CE is designed to be set up on any target codebase with a single installation step.
+
+### 1. Prerequisite
+Ensure you have **Node.js (v18+)** and **Git** installed on your system.
+
+### 2. Install and Configure
+
+#### Option A: Install via NPM (Recommended)
+You can install HSS-CE globally directly from the NPM registry:
+```bash
+npm install -g hss-ce
+```
+Once installed, move into your target project directory and initialize it:
+```bash
+hss-ce-integrate
+```
+
+#### Option B: Install from Source (Git Clone)
+If you prefer to clone and install the source code manually:
 ```bash
 git clone https://github.com/phuonglt/hss-ce.git
 cd hss-ce
 bash install.sh
 ```
-This script will verify your environment, install the necessary dependencies, and launch an interactive integration wizard.
-
-The wizard will:
-- Ask for your target codebase path.
-- **Automatically generate agent rules and workflows** in your target project directory (creates `.agents/rules/hss-ce.md`, `.agents/workflows/hss-ce.md`, `.cursorrules`, `CLAUDE.md`, and `.aider.instructions.md`).
-- Prompt you to register HSS-CE for your preferred coding agent (Antigravity, Claude Code, Aider, or Cursor).
 
 
-### 3. Make HSS-CE Command Global (Optional)
-To run the `hss-ce` command from anywhere on your computer:
-```bash
-npm link
-```
-
----
-
-## Coding Agent Integrations
-
-Integrating HSS-CE with your AI coding agents allows them to query your codebase structure automatically.
-
-### 1. Antigravity & Codex (Gemini IDE Assistant)
-Antigravity and Codex use a global `mcp_config.json` file. Add this config block to `~/.gemini/antigravity/mcp_config.json`:
-```json
-{
-  "mcpServers": {
-    "hss-ce": {
-      "command": "node",
-      "args": [
-        "/absolute/path/to/hss-ce/src/cli.js",
-        "mcp",
-        "/absolute/path/to/your/project"
-      ]
-    }
-  }
-}
-```
-
-### 2. Claude Code
-Claude Code automatically looks for MCP configurations. Add this to your project's `.mcp.json` or global config:
-```json
-{
-  "mcpServers": {
-    "hss-ce": {
-      "command": "node",
-      "args": [
-        "/absolute/path/to/hss-ce/src/cli.js",
-        "mcp",
-        "/absolute/path/to/your/project"
-      ]
-    }
-  }
-}
-```
-
-### 3. Cursor
-To use HSS-CE within Cursor:
-1. Open Cursor and go to **Settings > Features > MCP**.
-2. Click **+ Add New MCP Server**.
-3. Fill in the fields:
-   - **Name:** `hss-ce`
-   - **Type:** `command`
-   - **Command:** `node /absolute/path/to/hss-ce/src/cli.js mcp /absolute/path/to/your/project`
-4. Click **Save**.
-
-### 4. Aider
-To run Aider with HSS-CE as an MCP client:
-Add this line to your `aider.conf.yml` or pass it in your command line parameters:
-```yaml
-mcp:
-  - node /absolute/path/to/hss-ce/src/cli.js mcp /absolute/path/to/your/project
-```
+### 3. What the Installer Does Automatically
+Once launched, the script will:
+1. Install all required dependencies.
+2. Register the global CLI commands (`hss-ce` and `hss-ce-integrate`).
+3. Launch the setup wizard to ask for the path of your target codebase.
+4. **Auto-Index:** Analyze your target codebase, calculate PageRank structural weights, and build the SQLite database (`.hss-ce/graph.db`).
+5. **Auto-Doc:** Generate a `CODEBASE.md` markdown map and an interactive `architecture.html` dashboard in your target project directory.
+6. **Auto-Agent Setup:** Write context instructions and rules (`.cursorrules`, `CLAUDE.md`, `.aider.instructions.md`, `.agents/rules/hss-ce.md`) so your AI agents immediately know how to use HSS-CE.
+7. **Agent MCP Integration:** Prompt you to automatically add HSS-CE to your favorite coding client (Claude Desktop, Cursor, Claude Code, Aider, or Antigravity).
+8. **Git Hooks Setup:** Installs background Git hooks (`post-checkout` and `post-merge`) in your target repository to automatically trigger fast codebase indexing in the background whenever you switch branches or merge updates, keeping your database perfectly synced with your current branch.
 
 ---
 
-## CLI Usage
+## CLI Reference Guide
 
-For manual terminal usage:
+If you prefer using the terminal manually, HSS-CE provides the following commands:
 
-```bash
-# 1. Index codebase (determines files and logical layers)
-hss-ce index /path/to/project
-
-# 2. Index codebase and prioritize specific files (Personalization)
-hss-ce index /path/to/project --active=src/db.js,src/indexer.js
-
-# 3. View structural codebase map (includes layer details)
-hss-ce map /path/to/project
-
-# 4. View a compact, elided signature-only map under a token budget
-hss-ce map /path/to/project --compact --budget=1000
-
-# 5. Pack codebase files under a token budget with Secret Guard redaction
-hss-ce pack /path/to/project --budget=2000 --output=packed_context.txt
-
-# 6. Enrich codebase index with AI-generated summaries (Gemini API)
-export GEMINI_API_KEY="your_api_key_here"
-hss-ce enrich /path/to/project
-
-# 7. Generate a step-by-step onboarding tour of the codebase
-hss-ce tour /path/to/project
-```
-
----
-
-## Inspirations & Credits
-
-HSS-CE draws inspiration and features from several exceptional open-source tools:
-- **[Repomix](https://github.com/yamadashy/repomix) / [GitIngest](https://github.com/coderamp-labs/gitingest)**: Inspires our XML context packaging and budget-bounded file packing with token calculations.
-- **[Aider](https://github.com/Aider-AI/aider)**: Inspires our signature-only codebase skeleton mapping and token-budgeted structure elision.
-- **[Graphify](https://github.com/safishamsi/graphify)** / **[CodeGraph](https://github.com/colbymchenry/codegraph)**: Inspires our structural codebase graph modeling, import tracking, and PageRank scoring.
-- **[CodeCTX](https://github.com/tavilyai/codectx)**: Inspires our personalized context boost around user active files.
-- **[Understand-Anything](https://github.com/Lum1104/Understand-Anything)**: Inspires our logical layering (Entrypoint/Service/Storage), interactive visual dashboard highlighting, and guided onboarding tours.
+| Command | Usage | Description |
+|---|---|---|
+| `hss-ce index <path>` | `hss-ce index .` | Scan codebase structure and build local index. Add `-f` to force re-scan. |
+| `hss-ce map <path>` | `hss-ce map . --compact` | Print PageRank-ordered file structure. Add `--budget=1000` to limit tokens. |
+| `hss-ce doc <path>` | `hss-ce doc .` | Regenerate `CODEBASE.md` and `architecture.html` dashboard. |
+| `hss-ce tour <path>` | `hss-ce tour .` | Display a step-by-step onboarding walkthrough tour of the codebase. |
+| `hss-ce query <path> <sym>` | `hss-ce query . validateUser` | Instantly lookup definition and callers for a specific symbol. |
+| `hss-ce pack <path>` | `hss-ce pack . --budget=2000` | Package source files into structured XML for LLM context, with secret redacting. |
+| `hss-ce enrich <path>` | `hss-ce enrich .` | (Optional) Fetch AI-generated summaries via Gemini API (requires `GEMINI_API_KEY`). |
 
 ---
 
 ## License
 Licensed under the [MIT License](LICENSE).
-

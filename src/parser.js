@@ -5,12 +5,55 @@ function getLineNumber(content, index) {
   return content.slice(0, index).split('\n').length;
 }
 
+function extractSummary(content, ext) {
+  const trimmed = content.trim();
+  if (ext === '.py') {
+    // Match triple quote docstring at the top of python file
+    const match = trimmed.match(/^(?:"""([\s\S]*?)"""|'''([\s\S]*?)''')/);
+    if (match) {
+      const doc = (match[1] || match[2] || '').trim();
+      return doc.split('\n')[0].trim();
+    }
+  } else if (ext === '.js' || ext === '.ts' || ext === '.jsx' || ext === '.tsx') {
+    // Match JSDoc or block comment at the top of javascript file
+    const match = trimmed.match(/^\/\*\*?([\s\S]*?)\*\//);
+    if (match) {
+      const comment = match[1] || '';
+      const cleaned = comment
+        .split('\n')
+        .map(line => line.trim().replace(/^\*\s*/, ''))
+        .filter(line => line)
+        .join(' ')
+        .trim();
+      return cleaned.slice(0, 150);
+    }
+    // Match leading single-line comments
+    const lines = trimmed.split('\n');
+    let summaryLines = [];
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.startsWith('//')) {
+        summaryLines.push(trimmedLine.slice(2).trim());
+      } else if (trimmedLine === '') {
+        continue;
+      } else {
+        break;
+      }
+    }
+    if (summaryLines.length > 0) {
+      return summaryLines.join(' ').slice(0, 150);
+    }
+  }
+  return null;
+}
+
 export function parseFile(filePath) {
   const ext = path.extname(filePath);
   const content = fs.readFileSync(filePath, 'utf-8');
   
   const symbols = [];
   const imports = [];
+  const summary = extractSummary(content, ext);
 
   if (ext === '.js' || ext === '.ts' || ext === '.jsx' || ext === '.tsx') {
     parseJS(content, symbols, imports);
@@ -18,7 +61,7 @@ export function parseFile(filePath) {
     parsePython(content, symbols, imports);
   }
 
-  return { symbols, imports };
+  return { symbols, imports, summary };
 }
 
 function parseJS(content, symbols, imports) {

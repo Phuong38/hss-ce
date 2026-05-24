@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "Hybrid Semantic-Structural Context Engine. Optimizes codebase context retrieval for AI coding agents using PageRank and structural parsing.",
   "type": "module",
-  "bin": "./src/cli.js",
+  "bin": {
+    "hss-ce": "src/cli.js",
+    "hss-ce-integrate": "src/integrate.js"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/phuonglt/hss-ce.git"

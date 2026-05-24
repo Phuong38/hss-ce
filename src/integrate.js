@@ -1,8 +1,11 @@
+#!/usr/bin/env node
+
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const cliPath = path.resolve(__dirname, 'cli.js');
@@ -132,6 +135,29 @@ Follow these instructions to run HSS-CE tasks:
   console.log('\x1b[32mAgent rules & workflows successfully generated!\x1b[0m\n');
 }
 
+function setupGitHooks(targetProject, cliPath) {
+  const gitDir = path.join(targetProject, '.git');
+  if (!fs.existsSync(gitDir)) return;
+  if (!fs.lstatSync(gitDir).isDirectory()) return;
+
+  const hooksDir = path.join(gitDir, 'hooks');
+  ensureDir(hooksDir);
+
+  const hooks = ['post-checkout', 'post-merge'];
+  const hookContent = `#!/bin/sh
+# HSS-CE Git Hook: Auto-index codebase in the background
+node "${cliPath}" index . > /dev/null 2>&1 &
+`;
+
+  console.log('\n\x1b[34m=== Setting up Git Hooks ===\x1b[0m');
+  hooks.forEach(hook => {
+    const hookPath = path.join(hooksDir, hook);
+    fs.writeFileSync(hookPath, hookContent, { encoding: 'utf-8', mode: 0o755 });
+    console.log(`Created Git Hook: ${hookPath}`);
+  });
+  console.log('\x1b[32mGit hooks for automatic indexing successfully set up!\x1b[0m\n');
+}
+
 async function main() {
   console.log('\n\x1b[34m=== HSS-CE Agent Integration ===\x1b[0m');
   
@@ -148,14 +174,33 @@ async function main() {
   
   // Auto-generate agent rules and workflows
   generateAgentRules(targetProject, cliPath);
+
+  // Set up Git hooks for auto-indexing on checkout/merge
+  setupGitHooks(targetProject, cliPath);
+
+
+  // Auto-build codebase index & generate docs
+  console.log('\n\x1b[34m=== Building Initial Codebase Index & Diagrams ===\x1b[0m');
+  try {
+    console.log('Analyzing codebase structure and calculating PageRank (Offline)...');
+    execSync(`node "${cliPath}" index "${targetProject}"`, { stdio: 'inherit' });
+    
+    console.log('\nGenerating CODEBASE.md and architecture.html...');
+    execSync(`node "${cliPath}" doc "${targetProject}"`, { stdio: 'inherit' });
+    console.log('\n\x1b[32mCodebase indexed and dashboard generated successfully!\x1b[0m');
+  } catch (err) {
+    console.error('\x1b[31mError building initial index:\x1b[0m', err.message);
+  }
+
   console.log('\nSelect target Coding Agent to integrate:');
   console.log('1. Antigravity / Codex (Gemini IDE Assistant)');
   console.log('2. Claude Code');
   console.log('3. Aider');
   console.log('4. Cursor');
-  console.log('5. Exit / Skip');
+  console.log('5. Claude Desktop');
+  console.log('6. Exit / Skip');
   
-  const choice = await askQuestion('\nEnter choice (1-5): ');
+  const choice = await askQuestion('\nEnter choice (1-6): ');
 
   switch (choice.trim()) {
     case '1': { // Antigravity / Codex
@@ -243,6 +288,42 @@ async function main() {
       console.log('   - Name: hss-ce');
       console.log('   - Type: command');
       console.log(`   - Command: node ${cliPath} mcp ${targetProject}`);
+      break;
+    }
+
+    case '5': { // Claude Desktop
+      const home = homedir();
+      const isWin = process.platform === 'win32';
+      const configDir = isWin 
+        ? path.join(process.env.APPDATA, 'Claude') 
+        : path.join(home, 'Library', 'Application Support', 'Claude');
+      const configPath = path.join(configDir, 'claude_desktop_config.json');
+      
+      try {
+        if (!fs.existsSync(configDir)) {
+          fs.mkdirSync(configDir, { recursive: true });
+        }
+        
+        let config = { mcpServers: {} };
+        if (fs.existsSync(configPath)) {
+          try {
+            config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+            if (!config.mcpServers) config.mcpServers = {};
+          } catch {
+            console.log('Warning: Existing config corrupt. Creating new.');
+          }
+        }
+        
+        config.mcpServers['hss-ce'] = {
+          command: 'node',
+          args: [cliPath, 'mcp', targetProject]
+        };
+        
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+        console.log(`\n\x1b[32mSuccess! HSS-CE registered in Claude Desktop config: ${configPath}\x1b[0m`);
+      } catch (e) {
+        console.error('\x1b[31mError writing config:\x1b[0m', e.message);
+      }
       break;
     }
 

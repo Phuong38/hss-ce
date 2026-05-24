@@ -8,6 +8,40 @@ import * as fs from 'node:fs';
 
 const makeSafeId = (p) => p.replace(/[^a-zA-Z0-9]/g, '_');
 
+function getGroupForPath(filePath) {
+  const p = filePath.replace(/\\/g, '/');
+  const parts = p.split('/');
+  
+  if (p.startsWith('client/src/components/ui/')) {
+    return 'Client UI Components';
+  }
+  if (p.startsWith('client/src/components/')) {
+    return 'Client Components';
+  }
+  if (p.startsWith('client/src/lib/')) {
+    return 'Client Lib';
+  }
+  if (p.startsWith('server/src/core/')) {
+    return `Server Core: ${parts[3] || 'general'}`;
+  }
+  if (p.startsWith('server/src/infrastructure/')) {
+    return 'Server Infra';
+  }
+  if (p.startsWith('server/src/jobs/')) {
+    return 'Server Jobs';
+  }
+  if (p.startsWith('server/src/presentation/')) {
+    return 'Server API';
+  }
+  if (p.startsWith('scripts/')) {
+    return 'Scripts';
+  }
+  if (parts.length > 1) {
+    return parts[0];
+  }
+  return 'Root';
+}
+
 function generateMermaidGraph(deps, isMarkdown = false) {
   let mermaid = isMarkdown ? "```mermaid\ngraph TD\n" : "graph TD\n";
   if (deps.length === 0) {
@@ -35,33 +69,69 @@ function generateLayeredMermaidGraph(deps, map, isMarkdown = false) {
   if (deps.length === 0) {
     mermaid += "  NoDependencies[No dependencies found]\n";
   } else {
+    // Styling classes for nodes (using dark mode colors)
+    mermaid += "  classDef entrypoint fill:#311b22,stroke:#f43f5e,stroke-width:2px,color:#fda4af;\n";
+    mermaid += "  classDef service fill:#0f1d30,stroke:#38bdf8,stroke-width:2px,color:#7dd3fc;\n";
+    mermaid += "  classDef storage fill:#06261a,stroke:#34d399,stroke-width:2px,color:#a7f3d0;\n\n";
+
     const entrypoints = map.filter(f => f.layer === 'entrypoint');
     const services = map.filter(f => f.layer === 'service');
     const storage = map.filter(f => f.layer === 'storage');
 
-    if (entrypoints.length > 0) {
-      mermaid += "  subgraph Entrypoints\n";
-      entrypoints.forEach(f => {
-        mermaid += `    ${makeSafeId(f.path)}["${f.path}"]\n`;
-      });
-      mermaid += "  end\n";
-    }
+    const getGroupIcon = (groupName) => {
+      if (groupName.includes('UI')) return '🎨 ';
+      if (groupName.includes('Components')) return '🧩 ';
+      if (groupName.includes('Lib')) return '📦 ';
+      if (groupName.includes('Core')) return '🧠 ';
+      if (groupName.includes('Infra')) return '🛠️ ';
+      if (groupName.includes('Jobs')) return '⏰ ';
+      if (groupName.includes('API')) return '🔌 ';
+      if (groupName.includes('Scripts')) return '📜 ';
+      return '📂 ';
+    };
 
-    if (services.length > 0) {
-      mermaid += "  subgraph Services\n";
-      services.forEach(f => {
-        mermaid += `    ${makeSafeId(f.path)}["${f.path}"]\n`;
-      });
-      mermaid += "  end\n";
-    }
+    const getNodeIcon = (layer) => {
+      if (layer === 'entrypoint') return '🚀 ';
+      if (layer === 'storage') return '💾 ';
+      return '⚙️ ';
+    };
 
-    if (storage.length > 0) {
-      mermaid += "  subgraph Storage\n";
-      storage.forEach(f => {
-        mermaid += `    ${makeSafeId(f.path)}["${f.path}"]\n`;
+    const renderLayer = (layerId, displayName, files, layerClass) => {
+      if (files.length === 0) return '';
+      let res = `  subgraph ${layerId}["${displayName}"]\n`;
+      
+      const groups = {};
+      files.forEach(f => {
+        const g = getGroupForPath(f.path);
+        if (!groups[g]) groups[g] = [];
+        groups[g].push(f);
       });
-      mermaid += "  end\n";
-    }
+      
+      Object.keys(groups).forEach(g => {
+        const safeGroupId = makeSafeId(g);
+        const icon = getGroupIcon(g);
+        res += `    subgraph ${safeGroupId}["${icon}${g}"]\n`;
+        groups[g].forEach(f => {
+          const base = path.basename(f.path);
+          const nodeIcon = getNodeIcon(f.layer);
+          res += `      ${makeSafeId(f.path)}["${nodeIcon}${base}"]\n`;
+        });
+        res += `    end\n`;
+      });
+      
+      res += '  end\n';
+
+      // Apply style classes
+      files.forEach(f => {
+        res += `  class ${makeSafeId(f.path)} ${layerClass};\n`;
+      });
+      res += '\n';
+      return res;
+    };
+
+    mermaid += renderLayer('Entrypoints', '🚀 Entrypoints', entrypoints, 'entrypoint');
+    mermaid += renderLayer('Services', '⚙️ Services', services, 'service');
+    mermaid += renderLayer('Storage', '💾 Storage', storage, 'storage');
 
     deps.forEach(d => {
       const cleanSymbol = d.symbol.replace(/"/g, "'").replace(/[^\w-]/g, '_');
@@ -175,7 +245,8 @@ try {
     case 'index': {
       const db = new CodeDatabase(dbPath);
       const indexer = new CodeIndexer(db, rootDir);
-      indexer.index(false, activeFiles);
+      const forceIndex = args.includes('--force') || args.includes('-f');
+      indexer.index(forceIndex, activeFiles);
       break;
     }
 
@@ -238,14 +309,24 @@ try {
       let deps = db.db.prepare(`SELECT from_file, to_file, symbol FROM dependencies;`).all();
       
       // Filter dependencies for large codebases to keep the graph readable and avoid crashes
+      let filteredMap = map;
       if (map.length > 60) {
         const topFiles = map.slice(0, 60).map(f => f.path);
         const topFilesSet = new Set(topFiles);
-        deps = deps.filter(d => topFilesSet.has(d.from_file) && topFilesSet.has(d.to_file));
+        const filteredDeps = deps.filter(d => topFilesSet.has(d.from_file) && topFilesSet.has(d.to_file));
+        
+        const connectedFiles = new Set();
+        filteredDeps.forEach(d => {
+          connectedFiles.add(d.from_file);
+          connectedFiles.add(d.to_file);
+        });
+        
+        deps = filteredDeps;
+        filteredMap = map.filter(f => connectedFiles.has(f.path));
       }
       
       // 1. Generate standard markdown Mermaid block for README.md
-      const mermaid = generateLayeredMermaidGraph(deps, map, true);
+      const mermaid = generateLayeredMermaidGraph(deps, filteredMap, true);
 
       let fileDescriptions = "";
       map.forEach(file => {
@@ -295,7 +376,7 @@ node src/cli.js mcp .
       console.log(`Documentation generated at: ${docPath}`);
 
       // 2. Generate interactive HTML architecture explorer
-      const rawMermaidDef = generateLayeredMermaidGraph(deps, map, false);
+      const rawMermaidDef = generateLayeredMermaidGraph(deps, filteredMap, false);
 
       const htmlTemplate = `<!DOCTYPE html>
 <html lang="en">
@@ -464,6 +545,16 @@ node src/cli.js mcp .
       width: 100%;
       height: 100%;
     }
+    #mermaid-target svg .edgePath path {
+      stroke: #6366f1 !important;
+      stroke-width: 1.5px !important;
+      transition: stroke 0.25s ease, stroke-width 0.25s ease, opacity 0.25s ease, filter 0.25s ease;
+    }
+    #mermaid-target svg marker path,
+    #mermaid-target svg marker polygon {
+      fill: #6366f1 !important;
+      transition: fill 0.25s ease;
+    }
 
     .details-panel {
       border-right: none;
@@ -576,7 +667,8 @@ node src/cli.js mcp .
         // Add node click listeners
         svgElement.querySelectorAll('.node').forEach(nodeEl => {
           nodeEl.style.cursor = 'pointer';
-          nodeEl.addEventListener('click', () => {
+          nodeEl.addEventListener('click', (e) => {
+            e.stopPropagation();
             const idAttr = nodeEl.id || '';
             const match = idAttr.match(/flowchart-([a-zA-Z0-9_]+)/) || idAttr.match(/([a-zA-Z0-9_]+)/);
             const nodeId = match ? match[1] : '';
@@ -585,6 +677,15 @@ node src/cli.js mcp .
               selectFile(foundIndex);
             }
           });
+        });
+
+        // Clear selection on background click
+        svgElement.addEventListener('click', () => {
+          const cards = document.querySelectorAll('.file-card');
+          cards.forEach(c => c.classList.remove('active'));
+          const detailsContainer = document.getElementById('details-content');
+          detailsContainer.innerHTML = '<div style="color:var(--text-muted);text-align:center;margin-top:2rem;">Click a file to view details</div>';
+          highlightNodeInSvg(null);
         });
       }
     }).catch(err => console.error(err));
@@ -625,40 +726,146 @@ node src/cli.js mcp .
     }
 
     function highlightNodeInSvg(filePath) {
-      const safeId = filePath.replace(/[^a-zA-Z0-9]/g, '_');
       const svg = document.querySelector('#mermaid-target svg');
       if (!svg) return;
 
-      // Reset all nodes and edges opacity
-      svg.querySelectorAll('.node').forEach(el => el.style.opacity = '0.3');
-      svg.querySelectorAll('.edgePath').forEach(el => el.style.opacity = '0.1');
-      svg.querySelectorAll('.edgeLabel').forEach(el => el.style.opacity = '0.1');
+      const safeId = filePath ? filePath.replace(/[^a-zA-Z0-9]/g, '_') : null;
+
+      // Reset all nodes and edges to default state
+      svg.querySelectorAll('.node').forEach(el => {
+        el.style.opacity = '1';
+        el.style.removeProperty('color');
+        const shape = el.querySelector('rect, polygon, circle, ellipse, path');
+        if (shape) {
+          shape.style.removeProperty('fill');
+          shape.style.removeProperty('stroke');
+          shape.style.removeProperty('stroke-width');
+          shape.style.removeProperty('filter');
+        }
+        el.querySelectorAll('text, tspan').forEach(t => {
+          t.style.removeProperty('fill');
+          t.style.removeProperty('color');
+        });
+        el.querySelectorAll('span, div, p').forEach(t => {
+          t.style.removeProperty('color');
+        });
+      });
+
+      svg.querySelectorAll('path.flowchart-link').forEach(pathEl => {
+        pathEl.style.opacity = '1';
+        pathEl.style.removeProperty('stroke');
+        pathEl.style.removeProperty('stroke-width');
+        pathEl.style.removeProperty('filter');
+      });
+      svg.querySelectorAll('.edgeLabel').forEach(el => el.style.opacity = '1');
+
+      if (!safeId) return;
+
+      // Fade non-connected elements by default
+      svg.querySelectorAll('.node').forEach(el => {
+        const idAttr = el.id || '';
+        const match = idAttr.match(/flowchart-([a-zA-Z0-9_]+)/) || idAttr.match(/([a-zA-Z0-9_]+)/);
+        const nodeId = match ? match[1] : '';
+        if (nodeId !== safeId) {
+          el.style.opacity = '0.08';
+        }
+      });
+      svg.querySelectorAll('path.flowchart-link').forEach(pathEl => {
+        pathEl.style.opacity = '0.03';
+      });
+      svg.querySelectorAll('.edgeLabel').forEach(el => el.style.opacity = '0.03');
 
       // Find clicked node
       const nodeEl = svg.querySelector(\`.node[id*="\${safeId}"]\`) || svg.querySelector(\`[id^="\${safeId}"]\`);
       if (nodeEl) {
+        // Highlight active node
         nodeEl.style.opacity = '1';
+        nodeEl.parentNode.appendChild(nodeEl);
+        const activeShape = nodeEl.querySelector('rect, polygon, circle, ellipse, path');
+        if (activeShape) {
+          activeShape.style.setProperty('fill', '#fbbf24', 'important'); // Solid gold background
+          activeShape.style.setProperty('stroke', '#d97706', 'important'); // Gold/orange border
+          activeShape.style.setProperty('stroke-width', '4px', 'important');
+          activeShape.style.setProperty('filter', 'drop-shadow(0 0 10px rgba(251, 191, 36, 0.8))', 'important');
+        }
+        nodeEl.style.setProperty('color', '#0b0f19', 'important');
+        nodeEl.querySelectorAll('text, tspan').forEach(t => {
+          t.style.setProperty('fill', '#0b0f19', 'important');
+          t.style.setProperty('color', '#0b0f19', 'important');
+        });
+        nodeEl.querySelectorAll('span, div, p').forEach(t => {
+          t.style.setProperty('color', '#0b0f19', 'important');
+        });
         
-        svg.querySelectorAll('.edgePath').forEach(el => {
-          const classList = el.className.baseVal || '';
-          if (classList.includes(safeId)) {
-            el.style.opacity = '1';
-            const classes = classList.split(' ');
-            classes.forEach(cls => {
-              if (cls.startsWith('LS-') || cls.startsWith('LE-')) {
-                const targetNodeId = cls.slice(3);
-                const connectedNode = svg.querySelector(\`.node[id*="\${targetNodeId}"]\`);
-                if (connectedNode) {
-                  connectedNode.style.opacity = '0.8';
+        // Highlight connected edges and nodes using their generated SVG path IDs
+        svg.querySelectorAll('path.flowchart-link').forEach(pathEl => {
+          if (pathEl && pathEl.id) {
+            const idx = pathEl.id.indexOf('-L_');
+            if (idx !== -1) {
+              let parts = pathEl.id.slice(idx + 3);
+              const lastUnderscoreIdx = parts.lastIndexOf('_');
+              if (lastUnderscoreIdx !== -1) {
+                parts = parts.slice(0, lastUnderscoreIdx);
+                
+                let isConnected = false;
+                let targetNodeId = null;
+                const allNodeIds = data.map(f => f.path.replace(/[^a-zA-Z0-9]/g, '_'));
+                
+                if (parts.startsWith(safeId + '_')) {
+                  const candidate = parts.slice(safeId.length + 1);
+                  if (allNodeIds.includes(candidate)) {
+                    isConnected = true;
+                    targetNodeId = candidate;
+                  }
+                }
+                
+                if (!isConnected && parts.endsWith('_' + safeId)) {
+                  const candidate = parts.slice(0, parts.length - safeId.length - 1);
+                  if (allNodeIds.includes(candidate)) {
+                    isConnected = true;
+                    targetNodeId = candidate;
+                  }
+                }
+                
+                if (isConnected) {
+                  pathEl.style.opacity = '1';
+                  pathEl.style.setProperty('stroke', '#06b6d4', 'important'); // Glowing electric cyan
+                  pathEl.style.setProperty('stroke-width', '4px', 'important');
+                  pathEl.style.setProperty('filter', 'drop-shadow(0 0 6px rgba(6, 182, 212, 0.8))', 'important');
+                  
+                  // Bring edge parent group to front
+                  const edgeGroup = pathEl.closest('g');
+                  if (edgeGroup && edgeGroup !== svg) {
+                    edgeGroup.parentNode.appendChild(edgeGroup);
+                  }
+                  
+                  // Highlight connected nodes
+                  const connectedNode = svg.querySelector(\`.node[id*="\${targetNodeId}"]\`) || svg.querySelector(\`[id^="\${targetNodeId}"]\`);
+                  if (connectedNode) {
+                    connectedNode.style.opacity = '1';
+                    connectedNode.parentNode.appendChild(connectedNode); // Bring connected node to front
+                    
+                    const connShape = connectedNode.querySelector('rect, polygon, circle, ellipse, path');
+                    if (connShape) {
+                      connShape.style.setProperty('fill', '#0ea5e9', 'important'); // Solid sky blue background
+                      connShape.style.setProperty('stroke', '#0284c7', 'important'); // Vivid sky blue border
+                      connShape.style.setProperty('stroke-width', '3px', 'important');
+                      connShape.style.setProperty('filter', 'drop-shadow(0 0 8px rgba(14, 165, 233, 0.6))', 'important');
+                    }
+                    connectedNode.style.setProperty('color', '#ffffff', 'important');
+                    connectedNode.querySelectorAll('text, tspan').forEach(t => {
+                      t.style.setProperty('fill', '#ffffff', 'important');
+                      t.style.setProperty('color', '#ffffff', 'important');
+                    });
+                    connectedNode.querySelectorAll('span, div, p').forEach(t => {
+                      t.style.setProperty('color', '#ffffff', 'important');
+                    });
+                  }
                 }
               }
-            });
+            }
           }
         });
-      } else {
-        svg.querySelectorAll('.node').forEach(el => el.style.opacity = '1');
-        svg.querySelectorAll('.edgePath').forEach(el => el.style.opacity = '1');
-        svg.querySelectorAll('.edgeLabel').forEach(el => el.style.opacity = '1');
       }
     }
 
@@ -728,11 +935,7 @@ node src/cli.js mcp .
     case 'enrich': {
       const db = new CodeDatabase(dbPath);
       const forceEnrich = args.includes('--force');
-      const apiKey = process.env.GEMINI_API_KEY || args.find(a => a.startsWith('--key='))?.split('=')[1];
-      if (!apiKey) {
-        console.error('Error: GEMINI_API_KEY environment variable is not set. Use --key=<api_key> flag.');
-        process.exit(1);
-      }
+      const apiKey = process.env.GEMINI_API_KEY || args.find(a => a.startsWith('--key='))?.split('=')[1] || null;
       const { enrichCodebase } = await import('./enrich.js');
       await enrichCodebase(db, rootDir, apiKey, forceEnrich);
       break;

@@ -133,9 +133,9 @@ export class CodeIndexer {
         this.db.clearFileSymbolsAndDependencies(relativePath);
 
         try {
-          const { symbols, imports } = parseFile(filePath);
+          const { symbols, imports, summary } = parseFile(filePath);
           const layer = determineLayer(relativePath, symbols);
-          this.db.saveFile(relativePath, currentHash, layer);
+          this.db.saveFile(relativePath, currentHash, layer, summary);
           
           // Save symbols
           for (const sym of symbols) {

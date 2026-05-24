@@ -37,6 +37,11 @@ npm install
 echo "Verifying HSS-CE installation..."
 node src/cli.js > /dev/null || true
 
+# 5. Link globally so hss-ce and hss-ce-integrate commands are globally available
+echo "Linking hss-ce globally..."
+npm link || echo -e "${RED}Warning: Global linking failed. Using absolute path instead.${NC}"
+
+
 echo -e "${GREEN}=== Installation Successful! ===${NC}"
 echo ""
 echo "Launching HSS-CE integration wizard..."
