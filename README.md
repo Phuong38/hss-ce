@@ -30,7 +30,13 @@ git clone https://github.com/phuonglt/hss-ce.git
 cd hss-ce
 bash install.sh
 ```
-This script will verify your environment, install the necessary dependencies, and launch an interactive integration wizard to configure HSS-CE for your preferred coding agent (Antigravity, Claude Code, Aider, or Cursor) automatically.
+This script will verify your environment, install the necessary dependencies, and launch an interactive integration wizard.
+
+The wizard will:
+- Ask for your target codebase path.
+- **Automatically generate agent rules and workflows** in your target project directory (creates `.agents/rules/hss-ce.md`, `.agents/workflows/hss-ce.md`, `.cursorrules`, `CLAUDE.md`, and `.aider.instructions.md`).
+- Prompt you to register HSS-CE for your preferred coding agent (Antigravity, Claude Code, Aider, or Cursor).
+
 
 ### 3. Make HSS-CE Command Global (Optional)
 To run the `hss-ce` command from anywhere on your computer:
