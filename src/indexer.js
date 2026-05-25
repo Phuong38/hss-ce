@@ -65,8 +65,74 @@ export class CodeIndexer {
     return fileList;
   }
 
+  // Resolve TS path aliases by looking for the nearest tsconfig.json
+  resolvePathAlias(fromFile, importStr) {
+    let currentDir = path.dirname(fromFile);
+    const rootDir = this.rootDir;
+    
+    while (currentDir.startsWith(rootDir)) {
+      const tsconfigPath = path.join(currentDir, 'tsconfig.json');
+      if (fs.existsSync(tsconfigPath)) {
+        try {
+          const configContent = fs.readFileSync(tsconfigPath, 'utf-8');
+          // Strip comments from JSON
+          const cleanJson = configContent.replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1');
+          const config = JSON.parse(cleanJson);
+          const compilerOptions = config.compilerOptions;
+          if (compilerOptions && compilerOptions.paths) {
+            const baseUrl = compilerOptions.baseUrl || '.';
+            const baseDir = path.resolve(currentDir, baseUrl);
+            
+            for (const [aliasPattern, targetPatterns] of Object.entries(compilerOptions.paths)) {
+              const regexStr = '^' + aliasPattern.replace(/\*/g, '(.*)') + '$';
+              const regex = new RegExp(regexStr);
+              const match = importStr.match(regex);
+              
+              if (match) {
+                const wildcardValue = match[1] || '';
+                for (const targetPattern of targetPatterns) {
+                  const targetSubPath = targetPattern.replace(/\*/g, wildcardValue);
+                  const resolvedPath = path.resolve(baseDir, targetSubPath);
+                  
+                  if (fs.existsSync(resolvedPath) && fs.statSync(resolvedPath).isFile()) {
+                    return resolvedPath;
+                  }
+                  
+                  const extensions = ['.js', '.ts', '.jsx', '.tsx', '.py'];
+                  for (const ext of extensions) {
+                    const testPath = resolvedPath + ext;
+                    if (fs.existsSync(testPath)) {
+                      return testPath;
+                    }
+                  }
+                  for (const ext of extensions) {
+                    const testPath = path.join(resolvedPath, 'index' + ext);
+                    if (fs.existsSync(testPath)) {
+                      return testPath;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          // Ignore errors, check parent dir
+        }
+      }
+      const parentDir = path.dirname(currentDir);
+      if (parentDir === currentDir) break;
+      currentDir = parentDir;
+    }
+    return null;
+  }
+
   // Resolve import path to actual file path
   resolveImportPath(fromFile, importStr) {
+    const aliasResolved = this.resolvePathAlias(fromFile, importStr);
+    if (aliasResolved) {
+      return aliasResolved;
+    }
+
     const fromDir = path.dirname(fromFile);
     
     // 1. Relative imports (e.g., './foo', '../bar')

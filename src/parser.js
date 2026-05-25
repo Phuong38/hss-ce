@@ -112,30 +112,32 @@ function parseJS(content, symbols, imports) {
   }
 
   // 3. Functions
-  const funcRegex = /(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)/g;
+  const funcRegex = /(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)(?:\s*:\s*([^{;\n]+))?/g;
   while ((match = funcRegex.exec(content)) !== null) {
     const name = match[1];
     const params = match[2] || '';
+    const returnType = match[3] ? `: ${match[3].trim()}` : '';
     const line = getLineNumber(content, match.index);
     symbols.push({
       name,
       type: 'function',
-      signature: `function ${name}(${params.replace(/\s+/g, ' ')})`,
+      signature: `function ${name}(${params.replace(/\s+/g, ' ')})${returnType}`,
       startLine: line,
       endLine: line
     });
   }
 
   // 4. Arrow Functions / Constant Functions
-  const arrowRegex = /(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\(([^)]*)\)\s*=>/g;
+  const arrowRegex = /(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\(([^)]*)\)(?:\s*:\s*([^=>{\n]+))?\s*=>/g;
   while ((match = arrowRegex.exec(content)) !== null) {
     const name = match[1];
     const params = match[2] || '';
+    const returnType = match[3] ? `: ${match[3].trim()}` : '';
     const line = getLineNumber(content, match.index);
     symbols.push({
       name,
       type: 'function',
-      signature: `const ${name} = (${params.replace(/\s+/g, ' ')}) => ...`,
+      signature: `const ${name} = (${params.replace(/\s+/g, ' ')})${returnType} => ...`,
       startLine: line,
       endLine: line
     });
@@ -152,6 +154,35 @@ function parseJS(content, symbols, imports) {
       name,
       type: 'route',
       signature: `${method} ${routePath}`,
+      startLine: line,
+      endLine: line
+    });
+  }
+
+  // 6. Interfaces
+  const interfaceRegex = /(?:export\s+)?interface\s+(\w+)(?:\s+extends\s+([^{\n]+))?/g;
+  while ((match = interfaceRegex.exec(content)) !== null) {
+    const name = match[1];
+    const ext = match[2] ? ` extends ${match[2].trim()}` : '';
+    const line = getLineNumber(content, match.index);
+    symbols.push({
+      name,
+      type: 'interface',
+      signature: `interface ${name}${ext}`,
+      startLine: line,
+      endLine: line
+    });
+  }
+
+  // 7. Types
+  const typeRegex = /(?:export\s+)?type\s+(\w+)\s*=/g;
+  while ((match = typeRegex.exec(content)) !== null) {
+    const name = match[1];
+    const line = getLineNumber(content, match.index);
+    symbols.push({
+      name,
+      type: 'type',
+      signature: `type ${name}`,
       startLine: line,
       endLine: line
     });

@@ -50,10 +50,10 @@ function generateAgentRules(targetProject, cliPath) {
 This project has an active HSS-CE indexer database at \`.hss-ce/graph.db\`.
 
 Rules:
-- Before resolving complex changes or doing codebase mapping, check the map: \`node ${cliPath} map .\` to view PageRank importance, layers, and summaries.
-- Run onboarding tour: \`node ${cliPath} tour .\` or use the MCP tool \`get_onboarding_tour\` to understand codebase layers (Entrypoints, Services, Storage) step-by-step.
-- When searching for symbol definitions or callers, prefer running CLI query: \`node ${cliPath} query . <symbol>\` or using the MCP tool \`get_definition\` / \`get_callers\` rather than using raw \`grep\`.
-- When modifying code files, keep the graph updated by running \`node ${cliPath} index .\` and generate docs with \`node ${cliPath} doc .\`.
+- Before resolving complex changes or doing codebase mapping, check the map: \`npx hss-ce map .\` to view PageRank importance, layers, and summaries.
+- Run onboarding tour: \`npx hss-ce tour .\` or use the MCP tool \`get_onboarding_tour\` to understand codebase layers (Entrypoints, Services, Storage) step-by-step.
+- When searching for symbol definitions or callers, prefer running CLI query: \`npx hss-ce query . <symbol>\` or using the MCP tool \`get_definition\` / \`get_callers\` rather than using raw \`grep\`.
+- When modifying code files, keep the graph updated by running \`npx hss-ce index .\` and generate docs with \`npx hss-ce doc .\`.
 `;
   fs.writeFileSync(rulesPath, rulesContent, 'utf-8');
   console.log(`Created: ${rulesPath}`);
@@ -73,27 +73,27 @@ Follow these instructions to run HSS-CE tasks:
 
 1. **Re-index Codebase:**
    \`\`\`sh
-   node ${cliPath} index .
+   npx hss-ce index .
    \`\`\`
 2. **Generate Onboarding Tour:**
    \`\`\`sh
-   node ${cliPath} tour .
+   npx hss-ce tour .
    \`\`\`
 3. **Generate Architecture Diagrams & Documentation:**
    \`\`\`sh
-   node ${cliPath} doc .
+   npx hss-ce doc .
    \`\`\`
 4. **Query Code Skeleton Map:**
    \`\`\`sh
-   node ${cliPath} map .
+   npx hss-ce map .
    \`\`\`
 5. **Lookup Symbol Definition & Callers:**
    \`\`\`sh
-   node ${cliPath} query . <symbol>
+   npx hss-ce query . <symbol>
    \`\`\`
 6. **Enrich Codebase with AI Summaries:**
    \`\`\`sh
-   GEMINI_API_KEY="your_api_key" node ${cliPath} enrich .
+   GEMINI_API_KEY="your_api_key" npx hss-ce enrich .
    \`\`\`
 `;
   fs.writeFileSync(workflowsPath, workflowsContent, 'utf-8');
@@ -104,10 +104,10 @@ Follow these instructions to run HSS-CE tasks:
   const cursorRulesContent = `
 # HSS-CE Rules for Cursor
 - Use HSS-CE MCP tools (\`get_skeleton\`, \`get_definition\`, \`get_callers\`, \`get_routes\`, \`get_compact_map\`, \`pack_context\`, \`get_onboarding_tour\`) to explore the codebase and gather structural context.
-- To view codebase onboarding tour, run: \`node ${cliPath} tour .\`
-- To view codebase importance and layers, run: \`node ${cliPath} map . --compact --budget=1000\`
-- To search symbols: \`node ${cliPath} query . <symbol>\`
-- Keep index updated: \`node ${cliPath} index .\` after edits.
+- To view codebase onboarding tour, run: \`npx hss-ce tour .\`
+- To view codebase importance and layers, run: \`npx hss-ce map . --compact --budget=1000\`
+- To search symbols: \`npx hss-ce query . <symbol>\`
+- Keep index updated: \`npx hss-ce index .\` after edits.
 `;
   writeOrAppend(cursorRulesPath, cursorRulesContent);
 
@@ -116,9 +116,9 @@ Follow these instructions to run HSS-CE tasks:
   const claudeContent = `
 # HSS-CE instructions for Claude Code
 - Use the HSS-CE MCP server tools (including \`get_onboarding_tour\`) to search and gather structural context for functions/classes.
-- To understand the project structure, run the onboarding tour: \`node ${cliPath} tour .\`
-- Keep the index updated: \`node ${cliPath} index .\` after edits.
-- Use \`node \${cliPath} map .\` for structural visualization of codebase.
+- To understand the project structure, run the onboarding tour: \`npx hss-ce tour .\`
+- Keep the index updated: \`npx hss-ce index .\` after edits.
+- Use \`npx hss-ce map .\` for structural visualization of codebase.
 `;
   writeOrAppend(claudePath, claudeContent);
 
@@ -127,8 +127,8 @@ Follow these instructions to run HSS-CE tasks:
   const aiderInstructionsContent = `
 # HSS-CE rules for Aider
 - Aider can use HSS-CE via MCP configuration.
-- To view codebase graph or symbol definitions, run \`node ${cliPath} query . <symbol>\` or \`node ${cliPath} map .\`.
-- Update the index after editing files: \`node ${cliPath} index .\`.
+- To view codebase graph or symbol definitions, run \`npx hss-ce query . <symbol>\` or \`npx hss-ce map .\`.
+- Update the index after editing files: \`npx hss-ce index .\`.
 `;
   writeOrAppend(aiderInstructionsPath, aiderInstructionsContent);
   
@@ -146,7 +146,7 @@ function setupGitHooks(targetProject, cliPath) {
   const hooks = ['post-checkout', 'post-merge'];
   const hookContent = `#!/bin/sh
 # HSS-CE Git Hook: Auto-index codebase in the background
-node "${cliPath}" index . > /dev/null 2>&1 &
+npx hss-ce index . > /dev/null 2>&1 &
 `;
 
   console.log('\n\x1b[34m=== Setting up Git Hooks ===\x1b[0m');

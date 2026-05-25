@@ -1,6 +1,6 @@
 {
   "name": "hss-ce",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Hybrid Semantic-Structural Context Engine. Optimizes codebase context retrieval for AI coding agents using PageRank and structural parsing.",
   "type": "module",
   "bin": {

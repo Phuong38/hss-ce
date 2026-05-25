@@ -16,6 +16,22 @@ export function calculatePageRank(files, dependencies, iterations = 20, d = 0.85
     }
   });
 
+  // Set of direct dependencies and callers of personalized files
+  const activeDeps = new Set();
+  const activeCallers = new Set();
+  
+  if (personalization && personalization.length > 0) {
+    const personalizedSet = new Set(personalization);
+    dependencies.forEach(dep => {
+      if (personalizedSet.has(dep.from_file)) {
+        activeDeps.add(dep.to_file);
+      }
+      if (personalizedSet.has(dep.to_file)) {
+        activeCallers.add(dep.from_file);
+      }
+    });
+  }
+
   // Calculate score for each file: base count + git weight + personalization
   const scores = {};
   filePaths.forEach(path => {
@@ -27,9 +43,13 @@ export function calculatePageRank(files, dependencies, iterations = 20, d = 0.85
       score += Math.log(1 + gitWeights[path]);
     }
     
-    // Add Personalization boost
+    // Add Personalization boost (propagate to direct dependencies & callers)
     if (personalization && personalization.includes(path)) {
       score *= 10.0;
+    } else if (activeDeps.has(path)) {
+      score *= 3.0;
+    } else if (activeCallers.has(path)) {
+      score *= 2.0;
     }
     
     scores[path] = score;
