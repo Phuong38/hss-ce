@@ -127,6 +127,25 @@ export async function runMcpServer(dbPath, rootDir) {
             type: 'object',
             properties: {}
           }
+        },
+        {
+          name: 'get_symbol_context',
+          description: 'Get lines of code containing a class, function, or route definition plus surrounding context (padding lines). Conserves tokens compared to loading full files.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              symbolName: {
+                type: 'string',
+                description: 'The exact name of the symbol to retrieve context for'
+              },
+              paddingLines: {
+                type: 'integer',
+                description: 'Number of lines of padding above and below the symbol (default 15)',
+                default: 15
+              }
+            },
+            required: ['symbolName']
+          }
         }
       ]
     };
@@ -431,6 +450,67 @@ export async function runMcpServer(dbPath, rootDir) {
               {
                 type: 'text',
                 text: tour
+              }
+            ]
+          };
+        }
+
+        case 'get_symbol_context': {
+          const symName = args?.symbolName;
+          const padding = args?.paddingLines !== undefined ? args.paddingLines : 15;
+          const results = db.getDefinition(symName);
+          
+          if (results.length === 0) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Symbol "${symName}" not found in current index.`
+                }
+              ]
+            };
+          }
+
+          let output = `=== Context for Symbol: ${symName} ===\n`;
+
+          for (const res of results) {
+            const absPath = path.join(rootDir, res.file_path);
+            if (!fs.existsSync(absPath)) {
+              output += `\nFile ${res.file_path} not found on disk.\n`;
+              continue;
+            }
+
+            try {
+              const fileContent = fs.readFileSync(absPath, 'utf-8');
+              const lines = fileContent.split('\n');
+              
+              const startLine = Math.max(1, (res.start_line || 1) - padding);
+              const endLine = Math.min(lines.length, (res.end_line || res.start_line || 1) + padding);
+
+              output += `\n📄 File: [${res.file_path}] (Lines: ${startLine}-${endLine})\n`;
+              output += `Symbol definition: ${res.signature || res.name} (type: ${res.type})\n`;
+              
+              let extName = path.extname(res.file_path).slice(1);
+              if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
+              if (extName === 'ts' || extName === 'js') extName = 'javascript';
+              if (extName === 'py') extName = 'python';
+
+              output += '```' + extName + '\n';
+              for (let i = startLine; i <= endLine; i++) {
+                const prefix = i === res.start_line ? '👉 ' : '   ';
+                output += `${prefix}${i}: ${lines[i - 1]}\n`;
+              }
+              output += '```\n';
+            } catch (err) {
+              output += `\nError reading file ${res.file_path}: ${err.message}\n`;
+            }
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: output
               }
             ]
           };

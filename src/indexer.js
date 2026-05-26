@@ -285,6 +285,35 @@ export class CodeIndexer {
       // Ignore if git command fails or git not initialized
     }
 
+    // Auto-detect uncommitted/untracked files from Git to boost personalization (active working context)
+    let gitPersonalization = [];
+    try {
+      const statusOutput = execSync('git status --porcelain', { cwd: this.rootDir, encoding: 'utf-8' });
+      statusOutput.split('\n').forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        const spaceIndex = trimmed.search(/\s/);
+        if (spaceIndex !== -1) {
+          let filePathStr = trimmed.slice(spaceIndex + 1).trim();
+          if (filePathStr.startsWith('"') && filePathStr.endsWith('"')) {
+            filePathStr = filePathStr.slice(1, -1);
+          }
+          filePathStr = filePathStr.replace(/\\/g, '/');
+          gitPersonalization.push(filePathStr);
+        }
+      });
+    } catch {
+      // Ignore if git status fails
+    }
+
+    if (gitPersonalization.length > 0) {
+      if (!personalization) {
+        personalization = gitPersonalization;
+      } else {
+        personalization = Array.from(new Set([...personalization, ...gitPersonalization]));
+      }
+    }
+
     const files = this.db.getAllFiles();
     const dependencies = this.db.db.prepare(`SELECT * FROM dependencies;`).all();
     const ranks = calculatePageRank(files, dependencies, 20, 0.85, personalization, gitWeights);
