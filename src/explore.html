@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HSS-CE Codebase Explorer Dashboard</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- CSS for Prism.js Code Highlighting -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+  
+  <!-- External Scripts -->
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-jsx.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-tsx.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #070a13;
+      --panel-bg: rgba(255, 255, 255, 0.02);
+      --panel-hover: rgba(255, 255, 255, 0.04);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --text-main: #f8fafc;
+      --text-muted: #64748b;
+      --accent: #0ea5e9;
+      --accent-glow: rgba(14, 165, 233, 0.15);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 0.75rem 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(7, 10, 19, 0.6);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #0ea5e9, #6366f1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .path-container {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    header .path {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      padding: 0.25rem 0.6rem;
+      background: rgba(255,255,255,0.02);
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-action {
+      background: linear-gradient(135deg, #0ea5e9, #4f46e5);
+      border: none;
+      color: white;
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 0.8rem;
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .btn-action:hover {
+      opacity: 0.95;
+      transform: translateY(-1px);
+      box-shadow: 0 0 12px rgba(14, 165, 233, 0.4);
+    }
+
+    .layout {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 320px 1fr 450px;
+      height: calc(100vh - 50px);
+    }
+
+    .panel {
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+      background: rgba(7, 10, 19, 0.2);
+    }
+
+    .panel-header {
+      padding: 0.85rem 1rem;
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .scrollable {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.75rem;
+    }
+
+    .scrollable::-webkit-scrollbar { width: 5px; }
+    .scrollable::-webkit-scrollbar-track { background: transparent; }
+    .scrollable::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+    .scrollable::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+    /* Search & Filter controls */
+    .controls-wrapper {
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border-color);
+      background: rgba(255,255,255,0.01);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+    .search-input:focus {
+      border-color: var(--accent);
+    }
+
+    .sort-tabs {
+      display: flex;
+      gap: 0.25rem;
+      background: rgba(0,0,0,0.2);
+      padding: 0.2rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+    }
+
+    .sort-tab {
+      flex: 1;
+      text-align: center;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.3rem 0;
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all 0.2s ease;
+    }
+    .sort-tab:hover {
+      color: var(--text-main);
+    }
+    .sort-tab.active {
+      background: var(--accent);
+      color: white;
+    }
+
+    /* File List Cards */
+    .file-card {
+      padding: 0.75rem;
+      border-radius: 6px;
+      background: var(--panel-bg);
+      border: 1px solid var(--border-color);
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .file-card:hover {
+      border-color: rgba(14, 165, 233, 0.4);
+      background: var(--panel-hover);
+    }
+    .file-card.active {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+      box-shadow: 0 0 10px rgba(14, 165, 233, 0.1);
+    }
+
+    .file-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+
+    .file-name {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 210px;
+    }
+
+    .metrics-badges {
+      display: flex;
+      gap: 0.35rem;
+      font-size: 0.65rem;
+      font-family: var(--font-mono);
+      font-weight: 500;
+    }
+
+    .badge-metric {
+      padding: 0.1rem 0.3rem;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      gap: 0.15rem;
+    }
+    .badge-pr { background: rgba(14, 165, 233, 0.12); color: #38bdf8; }
+    .badge-cpx { background: rgba(245, 158, 11, 0.12); color: #fbbf24; }
+    .badge-frag { background: rgba(239, 68, 68, 0.12); color: #f87171; }
+
+    .file-meta-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+    }
+
+    .layer-badge {
+      font-size: 0.6rem;
+      font-weight: 700;
+      padding: 0.1rem 0.3rem;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+    .layer-badge.entrypoint { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+    .layer-badge.service { background: rgba(14, 165, 233, 0.15); color: #7dd3fc; }
+    .layer-badge.storage { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
+
+    /* Graph middle section */
+    .graph-panel {
+      display: flex;
+      flex-direction: column;
+      background: radial-gradient(circle at center, #0b0f1d 0%, #030408 100%);
+      position: relative;
+    }
+    .graph-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      padding: 1rem;
+      position: relative;
+      background-color: #05070f;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 0);
+      background-size: 24px 24px;
+    }
+    #graph-target {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Details panel right section */
+    .details-panel {
+      border-right: none;
+      border-left: 1px solid var(--border-color);
+      background: rgba(7, 10, 19, 0.3);
+    }
+
+    .tab-nav {
+      display: flex;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .tab-btn {
+      flex: 1;
+      text-align: center;
+      padding: 0.75rem 0;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s ease;
+    }
+    .tab-btn:hover {
+      color: var(--text-main);
+    }
+    .tab-btn.active {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .tab-content {
+      display: none;
+      height: 100%;
+      overflow-y: auto;
+    }
+    .tab-content.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Metrics detail cards */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.6rem;
+      margin-bottom: 1rem;
+    }
+    .metric-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 0.6rem 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .metric-card-label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.025em;
+    }
+    .metric-card-val {
+      font-size: 1.1rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--text-main);
+    }
+
+    .detail-heading {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      word-break: break-all;
+    }
+
+    .summary-text {
+      font-size: 0.8rem;
+      line-height: 1.5;
+      color: #cbd5e1;
+      padding: 0.65rem;
+      background: rgba(255,255,255,0.01);
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      margin-bottom: 1rem;
+    }
+
+    .symbols-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .symbol-item {
+      padding: 0.5rem;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .symbol-item:hover {
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(14, 165, 233, 0.3);
+    }
+    .symbol-top {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.2rem;
+    }
+    .symbol-name {
+      font-weight: 600;
+      color: var(--text-main);
+    }
+    .symbol-type {
+      font-size: 0.6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.05rem 0.25rem;
+      border-radius: 3px;
+    }
+    .symbol-type.class { background: rgba(129, 140, 248, 0.15); color: #a5b4fc; }
+    .symbol-type.function { background: rgba(14, 165, 233, 0.15); color: #7dd3fc; }
+    .symbol-type.route { background: rgba(239, 68, 68, 0.15); color: #fda4af; }
+    .symbol-type.interface { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
+    .symbol-type.type { background: rgba(245, 158, 11, 0.15); color: #fde047; }
+
+    .symbol-signature {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Code Viewer Tab */
+    .code-viewer-container {
+      position: relative;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    pre[class*="language-"] {
+      margin: 0;
+      border-radius: 0;
+      background: #030408 !important;
+      font-size: 0.75rem;
+      flex: 1;
+      overflow: auto;
+    }
+
+    .code-viewer-header {
+      padding: 0.5rem 0.75rem;
+      background: rgba(0,0,0,0.4);
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .highlighted-line {
+      background: rgba(14, 165, 233, 0.15) !important;
+      display: block;
+      margin: 0 -1em;
+      padding: 0 1em;
+      border-left: 3px solid var(--accent);
+    }
+
+    /* Notification banner */
+    .notif-banner {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      padding: 0.75rem 1rem;
+      background: rgba(16, 185, 129, 0.95);
+      color: white;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      z-index: 1000;
+      transform: translateY(150%);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .notif-banner.active {
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      HSS-CE Codebase Explorer
+    </h1>
+    <div class="path-container">
+      <div class="path" id="root-path">.</div>
+      <button class="btn-action" id="btn-reindex" onclick="triggerReindex()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        Re-index Code
+      </button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- Left column: File list -->
+    <div class="panel">
+      <div class="panel-header">
+        <span>Files</span>
+        <span style="font-size: 0.7rem; color: var(--text-muted);" id="file-count">0</span>
+      </div>
+      <div class="controls-wrapper">
+        <input type="text" class="search-input" id="search-box" placeholder="Search files or symbols..." oninput="onSearchChange()" />
+        <div class="sort-tabs">
+          <div class="sort-tab active" id="sort-pagerank" onclick="changeSort('pagerank')">PageRank</div>
+          <div class="sort-tab" id="sort-complexity" onclick="changeSort('complexity')">Complexity</div>
+          <div class="sort-tab" id="sort-fragility" onclick="changeSort('fragility')">Fragility</div>
+        </div>
+      </div>
+      <div class="scrollable" id="files-list"></div>
+    </div>
+
+    <!-- Middle column: Dependency Graph -->
+    <div class="panel graph-panel">
+      <div class="panel-header">
+        <span>Interactive Architecture Graph</span>
+      </div>
+      <div class="graph-container">
+        <div id="graph-target"></div>
+        <!-- Legend Overlay -->
+        <div class="legend-container" style="position: absolute; bottom: 1rem; left: 1rem; background: rgba(7, 10, 19, 0.85); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.8rem; pointer-events: none; z-index: 10; width: 180px;">
+          <div style="font-size: 0.6rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; font-family: var(--font-sans);">Relationships</div>
+          <div style="display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.65rem; color: #cbd5e1; font-family: var(--font-sans);">
+            <div style="display: flex; align-items: center; gap: 0.5rem;"><span style="width: 14px; height: 1.5px; border-top: 1.5px dashed rgba(255, 255, 255, 0.4); display: inline-block;"></span> Hierarchy (Contains)</div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;"><span style="width: 14px; height: 1.5px; background: #0ea5e9; display: inline-block;"></span> Calls / Dependencies</div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;"><span style="width: 14px; height: 1.5px; background: #f59e0b; display: inline-block;"></span> Active Path / Selection</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right column: Detail Viewer -->
+    <div class="panel details-panel">
+      <div class="tab-nav">
+        <div class="tab-btn active" id="tab-details-btn" onclick="switchTab('details')">Details</div>
+        <div class="tab-btn" id="tab-code-btn" onclick="switchTab('code')">Source Code</div>
+      </div>
+      
+      <div class="scrollable" style="flex: 1; padding: 0;">
+        <!-- Details Tab Content -->
+        <div class="tab-content active" id="tab-details" style="padding: 1rem;">
+          <div id="details-empty" style="color: var(--text-muted); text-align: center; margin-top: 3rem;">
+            Click a file or node to view metrics & exported symbols
+          </div>
+          <div id="details-content" style="display: none;">
+            <div class="detail-heading" id="detail-filename">file.js</div>
+            
+            <div style="margin: 0.5rem 0 1rem 0;">
+              <span class="layer-badge" id="detail-layer">service</span>
+            </div>
+
+            <div class="metrics-grid">
+              <div class="metric-card">
+                <span class="metric-card-label">PageRank</span>
+                <span class="metric-card-val" id="val-pr">0.0000</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-card-label">Complexity</span>
+                <span class="metric-card-val" id="val-complexity">1.0</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-card-label">Fragility Score</span>
+                <span class="metric-card-val" id="val-fragility">1.0</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-card-label">Coupling (In/Out)</span>
+                <span class="metric-card-val" id="val-coupling">0 / 0</span>
+              </div>
+            </div>
+
+            <div class="detail-heading" style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted);">Summary</div>
+            <div class="summary-text" id="detail-summary">No summary available.</div>
+
+            <div class="detail-heading" style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">Exported Symbols</div>
+            <div class="symbols-list" id="detail-symbols"></div>
+          </div>
+        </div>
+
+        <!-- Code Viewer Tab Content -->
+        <div class="tab-content" id="tab-code">
+          <div class="code-viewer-container">
+            <div class="code-viewer-header">
+              <span id="code-filepath">No file loaded</span>
+              <span id="code-lang">text</span>
+            </div>
+            <pre><code class="language-javascript" id="code-box">Select a file to view code.</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notif-banner" id="notif-banner">Codebase index re-built successfully!</div>
+
+  <script>
+    let rawData = null;
+    let currentSort = 'pagerank';
+    let currentSearch = '';
+    let selectedFileIndex = -1;
+    let networkInstance = null;
+    let nodesDataSet = null;
+    let edgesDataSet = null;
+    let nodeMetadata = {};
+
+    async function loadData() {
+      try {
+        const res = await fetch('/api/data');
+        rawData = await res.json();
+        
+        document.getElementById('root-path').textContent = rawData.rootDir;
+        document.getElementById('file-count').textContent = rawData.files.length + ' files';
+        
+        renderFileList();
+        renderGraph();
+      } catch (err) {
+        console.error('Failed to load graph data:', err);
+      }
+    }
+
+    function renderFileList() {
+      const listContainer = document.getElementById('files-list');
+      listContainer.innerHTML = '';
+
+      if (!rawData) return;
+
+      // Filter
+      let files = rawData.files.map((f, i) => ({ ...f, origIndex: i }));
+      if (currentSearch) {
+        const query = currentSearch.toLowerCase();
+        files = files.filter(f => 
+          f.path.toLowerCase().includes(query) ||
+          f.symbols.some(s => s.name.toLowerCase().includes(query))
+        );
+      }
+
+      // Sort
+      files.sort((a, b) => {
+        if (currentSort === 'pagerank') return b.pagerank - a.pagerank;
+        if (currentSort === 'complexity') return b.complexity - a.complexity;
+        if (currentSort === 'fragility') return b.fragility - a.fragility;
+        return 0;
+      });
+
+      files.forEach((file) => {
+        const card = document.createElement('div');
+        card.className = 'file-card';
+        if (file.origIndex === selectedFileIndex) {
+          card.classList.add('active');
+        }
+        card.onclick = () => selectFile(file.origIndex);
+
+        const cardTop = document.createElement('div');
+        cardTop.className = 'file-card-top';
+
+        const name = document.createElement('span');
+        name.className = 'file-name';
+        name.textContent = file.path;
+
+        const layer = document.createElement('span');
+        layer.className = `layer-badge ${file.layer}`;
+        layer.textContent = file.layer;
+
+        cardTop.appendChild(name);
+        cardTop.appendChild(layer);
+
+        const cardBottom = document.createElement('div');
+        cardBottom.className = 'file-meta-bottom';
+
+        const badges = document.createElement('div');
+        badges.className = 'metrics-badges';
+
+        const prBadge = document.createElement('span');
+        prBadge.className = 'badge-metric badge-pr';
+        prBadge.innerHTML = `PR: ${file.pagerank.toFixed(3)}`;
+
+        const cpxBadge = document.createElement('span');
+        cpxBadge.className = 'badge-metric badge-cpx';
+        cpxBadge.innerHTML = `CPX: ${Math.round(file.complexity)}`;
+
+        const fragBadge = document.createElement('span');
+        fragBadge.className = 'badge-metric badge-frag';
+        fragBadge.innerHTML = `FRG: ${Math.round(file.fragility)}`;
+
+        badges.appendChild(prBadge);
+        badges.appendChild(cpxBadge);
+        badges.appendChild(fragBadge);
+
+        const coupling = document.createElement('span');
+        coupling.textContent = `Cpl: ${file.coupling_in}← / →${file.coupling_out}`;
+
+        cardBottom.appendChild(badges);
+        cardBottom.appendChild(coupling);
+
+        card.appendChild(cardTop);
+        card.appendChild(cardBottom);
+        listContainer.appendChild(card);
+      });
+    }
+
+    function renderGraph() {
+      if (!rawData) return;
+
+      const container = document.getElementById('graph-target');
+      
+      // Filter logic to keep top files or matched files to prevent visual overload
+      let renderFiles = [...rawData.files];
+      let renderDeps = [...rawData.dependencies];
+
+      if (renderFiles.length > 50 && !currentSearch) {
+        renderFiles.sort((a, b) => b.pagerank - a.pagerank);
+        renderFiles = renderFiles.slice(0, 50);
+        const filePathsSet = new Set(renderFiles.map(f => f.path));
+        renderDeps = renderDeps.filter(d => filePathsSet.has(d.from_file) && filePathsSet.has(d.to_file));
+      } else if (currentSearch) {
+        const query = currentSearch.toLowerCase();
+        const matches = rawData.files.filter(f => 
+          f.path.toLowerCase().includes(query) || 
+          f.symbols.some(s => s.name.toLowerCase().includes(query))
+        );
+        const matchPaths = new Set(matches.map(f => f.path));
+        
+        const connectedPaths = new Set();
+        renderDeps.forEach(d => {
+          if (matchPaths.has(d.from_file)) {
+            connectedPaths.add(d.from_file);
+            connectedPaths.add(d.to_file);
+          }
+          if (matchPaths.has(d.to_file)) {
+            connectedPaths.add(d.from_file);
+            connectedPaths.add(d.to_file);
+          }
+        });
+
+        renderFiles = rawData.files.filter(f => matchPaths.has(f.path) || connectedPaths.has(f.path));
+        renderDeps = renderDeps.filter(d => 
+          (matchPaths.has(d.from_file) || connectedPaths.has(d.from_file)) &&
+          (matchPaths.has(d.to_file) || connectedPaths.has(d.to_file))
+        );
+      }
+
+      const getDir = (filePath) => {
+        const parts = filePath.split('/');
+        parts.pop();
+        return parts.join('/') || 'root';
+      };
+
+      // Build folder tree nodes and records
+      const tree = {};
+      nodeMetadata = {};
+      
+      tree['root'] = [];
+      nodeMetadata['root'] = { isDir: true, name: 'root', layer: 'entrypoint' };
+
+      const addToTree = (parent, childPath, isDir, name, layer) => {
+        if (!tree[parent]) tree[parent] = [];
+        if (!tree[parent].includes(childPath)) {
+          tree[parent].push(childPath);
+        }
+        nodeMetadata[childPath] = { isDir, name, layer };
+      };
+
+      renderFiles.forEach(f => {
+        const parts = f.path.split('/');
+        let current = 'root';
+        for (let i = 0; i < parts.length - 1; i++) {
+          const dirPath = parts.slice(0, i + 1).join('/');
+          addToTree(current, dirPath, true, parts[i], f.layer);
+          current = dirPath;
+        }
+        addToTree(current, f.path, false, parts[parts.length - 1], f.layer);
+      });
+
+      // Calculate subtree widths & assign coordinates using tree placement
+      const fileCoords = {};
+      const subtreeWidths = {};
+
+      const computeSubtreeWidth = (nodePath) => {
+        const children = tree[nodePath] || [];
+        if (children.length === 0) {
+          subtreeWidths[nodePath] = 220; // horizontal separation spacing
+          return 220;
+        }
+        let total = 0;
+        children.forEach(c => {
+          total += computeSubtreeWidth(c);
+        });
+        subtreeWidths[nodePath] = Math.max(220, total);
+        return subtreeWidths[nodePath];
+      };
+
+      computeSubtreeWidth('root');
+
+      const assignCoords = (nodePath, startX, yCoord) => {
+        const width = subtreeWidths[nodePath];
+        const centerX = startX + width / 2;
+        fileCoords[nodePath] = { x: centerX, y: yCoord };
+
+        const children = tree[nodePath] || [];
+        let currentX = startX;
+        children.forEach(c => {
+          const childWidth = subtreeWidths[c];
+          assignCoords(c, currentX, yCoord + 160); // vertical distance per folder depth
+          currentX += childWidth;
+        });
+      };
+
+      assignCoords('root', -subtreeWidths['root'] / 2, -350);
+
+      // Map to Vis.js Nodes
+      const visNodes = Object.keys(nodeMetadata).map(path => {
+        const meta = nodeMetadata[path];
+        const coords = fileCoords[path] || { x: 0, y: 0 };
+        
+        let border = '#10b981'; // Green for normal/service
+        let bg = '#062419';
+        let hoverBg = '#0a3325';
+        let hoverBorder = '#a7f3d0';
+        
+        if (meta.layer === 'entrypoint') {
+          border = '#f43f5e'; // Red
+          bg = '#2a1215';
+          hoverBg = '#3b161b';
+          hoverBorder = '#fda4af';
+        } else if (meta.layer === 'storage') {
+          border = '#f59e0b'; // Orange
+          bg = '#332308';
+          hoverBg = '#422c09';
+          hoverBorder = '#fde047';
+        }
+
+        const f = rawData.files.find(x => x.path === path);
+        const pr = f ? f.pagerank : 0.5;
+        const sizeFactor = 1.5 + pr * 6.0;
+
+        return {
+          id: path,
+          x: coords.x,
+          y: coords.y,
+          label: meta.isDir 
+            ? `<b>📁 ${meta.name}</b>  ▼\nFolder`
+            : `<b>📄 ${meta.name}</b>\nPR: ${pr.toFixed(3)} | CPX: ${f ? Math.round(f.complexity) : 0}`,
+          shape: 'box',
+          margin: 12,
+          borderWidth: sizeFactor,
+          color: {
+            background: bg,
+            border: border,
+            highlight: {
+              background: hoverBg,
+              border: '#38bdf8'
+            },
+            hover: {
+              background: hoverBg,
+              border: hoverBorder
+            }
+          },
+          font: {
+            color: '#e0f2fe',
+            face: 'Plus Jakarta Sans',
+            size: 11,
+            multi: 'html',
+            align: 'left'
+          },
+          shadow: {
+            enabled: true,
+            color: 'rgba(0,0,0,0.6)',
+            size: 8,
+            x: 0,
+            y: 4
+          }
+        };
+      });
+
+      // Map to Vis.js Edges (Hierarchy contains + Calls dependencies)
+      const visEdges = [];
+      let edgeIdCounter = 0;
+
+      // 1. Hierarchy edges (grey dashed arrows)
+      Object.keys(tree).forEach(parent => {
+        tree[parent].forEach(child => {
+          visEdges.push({
+            id: `hierarchy_${edgeIdCounter++}`,
+            from: parent,
+            to: child,
+            label: 'contains',
+            isHierarchy: true,
+            arrows: { to: { enabled: false } },
+            dashes: true,
+            font: {
+              color: '#94a3b8',
+              face: 'Plus Jakarta Sans',
+              size: 8,
+              strokeWidth: 0,
+              background: '#05070f'
+            },
+            color: {
+              color: 'rgba(255, 255, 255, 0.15)',
+              highlight: '#f59e0b',
+              hover: '#94a3b8'
+            }
+          });
+        });
+      });
+
+      // 2. Call edges (solid thin blue arrows)
+      renderDeps.forEach(d => {
+        const cleanSymbol = d.symbol.replace(/"/g, "'").replace(/[^\w-]/g, '_');
+        visEdges.push({
+          id: `call_${edgeIdCounter++}`,
+          from: d.from_file,
+          to: d.to_file,
+          label: cleanSymbol,
+          isHierarchy: false,
+          arrows: {
+            to: { enabled: true, scaleFactor: 0.8 }
+          },
+          font: {
+            color: '#64748b',
+            face: 'Plus Jakarta Sans',
+            size: 8,
+            strokeWidth: 0,
+            background: '#05070f',
+            vadjust: -10
+          },
+          color: {
+            color: 'rgba(14, 165, 233, 0.25)',
+            highlight: '#f59e0b',
+            hover: '#38bdf8'
+          },
+          smooth: {
+            type: 'cubicBezier',
+            forceDirection: 'none',
+            roundness: 0.4
+          }
+        });
+      });
+
+      nodesDataSet = new vis.DataSet(visNodes);
+      edgesDataSet = new vis.DataSet(visEdges);
+
+      const data = {
+        nodes: nodesDataSet,
+        edges: edgesDataSet
+      };
+
+      const options = {
+        nodes: {
+          shape: 'box',
+        },
+        edges: {
+          hoverWidth: 1.5,
+          selectionWidth: 2
+        },
+        physics: {
+          enabled: false
+        },
+        interaction: {
+          hover: true,
+          tooltipDelay: 150,
+          hideEdgesOnDrag: false
+        }
+      };
+
+      if (networkInstance) {
+        networkInstance.destroy();
+      }
+
+      networkInstance = new vis.Network(container, data, options);
+
+      // Handle selection
+      networkInstance.on("selectNode", function (params) {
+        if (params.nodes.length > 0) {
+          const filePath = params.nodes[0];
+          const idx = rawData.files.findIndex(f => f.path === filePath);
+          if (idx !== -1) {
+            selectFile(idx);
+          }
+        }
+      });
+
+      // Handle clicking background
+      networkInstance.on("click", function (params) {
+        if (params.nodes.length === 0) {
+          highlightNodeInSvg(null);
+        }
+      });
+    }
+
+    function highlightNodeInSvg(filePath) {
+      if (!networkInstance || !rawData || !nodesDataSet || !edgesDataSet) return;
+
+      const visibleNodeIds = nodesDataSet.getIds();
+      const visibleEdgeIds = edgesDataSet.getIds();
+
+      if (!filePath) {
+        const updatedNodes = visibleNodeIds.map(id => {
+          const meta = nodeMetadata[id];
+          if (!meta) return null;
+          let border = '#10b981';
+          let bg = '#062419';
+          if (meta.layer === 'entrypoint') { border = '#f43f5e'; bg = '#2a1215'; }
+          else if (meta.layer === 'storage') { border = '#f59e0b'; bg = '#332308'; }
+
+          return {
+            id: id,
+            color: { background: bg, border: border },
+            font: { color: '#e0f2fe' }
+          };
+        }).filter(Boolean);
+
+        const updatedEdges = visibleEdgeIds.map(id => {
+          const edge = edgesDataSet.get(id);
+          if (!edge) return null;
+          if (edge.isHierarchy) {
+            return { id: id, color: { color: 'rgba(255, 255, 255, 0.15)' } };
+          } else {
+            return { id: id, color: { color: 'rgba(14, 165, 233, 0.25)' } };
+          }
+        }).filter(Boolean);
+
+        nodesDataSet.update(updatedNodes);
+        edgesDataSet.update(updatedEdges);
+        networkInstance.unselectAll();
+        return;
+      }
+
+      const connectedNodes = new Set();
+      connectedNodes.add(filePath);
+
+      const updatedEdges = visibleEdgeIds.map(id => {
+        const edge = edgesDataSet.get(id);
+        if (!edge) return null;
+        const isFrom = edge.from === filePath;
+        const isTo = edge.to === filePath;
+        
+        if (isFrom || isTo) {
+          connectedNodes.add(edge.from);
+          connectedNodes.add(edge.to);
+          
+          if (edge.isHierarchy) {
+            return { id: id, color: { color: '#f59e0b' } }; // Orange for active hierarchy path
+          } else {
+            return { id: id, color: { color: '#0ea5e9' } }; // Blue for active dependencies
+          }
+        } else {
+          return {
+            id: id,
+            color: { color: 'rgba(255, 255, 255, 0.03)' }
+          };
+        }
+      }).filter(Boolean);
+
+      const updatedNodes = visibleNodeIds.map(id => {
+        const meta = nodeMetadata[id];
+        if (!meta) return null;
+        const isConnected = connectedNodes.has(id);
+        const isTarget = id === filePath;
+
+        let border = '#10b981';
+        let bg = '#062419';
+        if (meta.layer === 'entrypoint') { border = '#f43f5e'; bg = '#2a1215'; }
+        else if (meta.layer === 'storage') { border = '#f59e0b'; bg = '#332308'; }
+        
+        if (isTarget) {
+          border = '#f59e0b';
+          bg = '#422c09';
+        }
+
+        return {
+          id: id,
+          color: { background: bg, border: border },
+          font: { color: isConnected ? '#e0f2fe' : 'rgba(224, 242, 254, 0.2)' }
+        };
+      }).filter(Boolean);
+
+      nodesDataSet.update(updatedNodes);
+      edgesDataSet.update(updatedEdges);
+
+      if (visibleNodeIds.includes(filePath)) {
+        networkInstance.selectNodes([filePath]);
+        networkInstance.focus(filePath, {
+          scale: 0.9,
+          animation: {
+            duration: 350,
+            easingFunction: 'easeInOutQuad'
+          }
+        });
+      }
+    }
+
+    async function selectFile(index) {
+      if (index === -1 || !rawData) return;
+      
+      selectedFileIndex = index;
+      const file = rawData.files[index];
+
+      // Highlight list card
+      document.querySelectorAll('.file-card').forEach((card, idx) => {
+        const fileCardIndex = rawData.files.findIndex(f => f.path === card.querySelector('.file-name').textContent);
+        if (fileCardIndex === index) {
+          card.classList.add('active');
+        } else {
+          card.classList.remove('active');
+        }
+      });
+
+      // Show details tab content
+      document.getElementById('details-empty').style.display = 'none';
+      const content = document.getElementById('details-content');
+      content.style.display = 'block';
+
+      // Set values
+      document.getElementById('detail-filename').textContent = file.path;
+      const layerBadge = document.getElementById('detail-layer');
+      layerBadge.textContent = file.layer;
+      layerBadge.className = `layer-badge ${file.layer}`;
+
+      document.getElementById('val-pr').textContent = file.pagerank.toFixed(4);
+      document.getElementById('val-complexity').textContent = Math.round(file.complexity);
+      document.getElementById('val-fragility').textContent = Math.round(file.fragility);
+      document.getElementById('val-coupling').textContent = `${file.coupling_in} In / ${file.coupling_out} Out`;
+      
+      document.getElementById('detail-summary').textContent = file.summary || 'No enrich summary available. Run "hss-ce enrich" to generate summaries.';
+
+      // Render symbols list
+      const symList = document.getElementById('detail-symbols');
+      symList.innerHTML = '';
+      
+      if (file.symbols.length === 0) {
+        symList.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">No exported symbols.</div>';
+      } else {
+        file.symbols.forEach(sym => {
+          const item = document.createElement('div');
+          item.className = 'symbol-item';
+          item.onclick = () => showCodeAtLine(file.path, sym.startLine);
+          
+          item.innerHTML = `
+            <div class="symbol-top">
+              <span class="symbol-name">${sym.name}</span>
+              <span class="symbol-type ${sym.type}">${sym.type}</span>
+            </div>
+            ${sym.signature ? `<div class="symbol-signature">${sym.signature}</div>` : ''}
+          `;
+          symList.appendChild(item);
+        });
+      }
+
+      highlightNodeInSvg(file.path);
+
+      // Preload source code inside viewer but stay on details tab
+      loadCode(file.path);
+    }
+
+    async function loadCode(filePath, highlightLine = -1) {
+      try {
+        const res = await fetch(`/api/file?path=${encodeURIComponent(filePath)}`);
+        const text = await res.json().catch(() => null) || await res.text();
+        
+        if (text && text.error) {
+          document.getElementById('code-box').textContent = `Error: ${text.error}`;
+          return;
+        }
+
+        const ext = filePath.split('.').pop().toLowerCase();
+        let lang = 'javascript';
+        if (ext === 'ts') lang = 'typescript';
+        else if (ext === 'py') lang = 'python';
+        else if (ext === 'tsx') lang = 'tsx';
+        else if (ext === 'jsx') lang = 'jsx';
+
+        document.getElementById('code-filepath').textContent = filePath;
+        document.getElementById('code-lang').textContent = lang;
+
+        const codeBox = document.getElementById('code-box');
+        codeBox.className = `language-${lang}`;
+        
+        if (highlightLine > 0) {
+          // Highlight target line by adding custom classes to HTML lines
+          const lines = text.split('\n');
+          const annotatedHtml = lines.map((line, idx) => {
+            const lineNum = idx + 1;
+            const isTarget = lineNum === highlightLine;
+            const escapeHTML = str => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            if (isTarget) {
+              return `<span class="highlighted-line">${escapeHTML(line)}</span>`;
+            }
+            return escapeHTML(line);
+          }).join('\n');
+          codeBox.innerHTML = annotatedHtml;
+        } else {
+          codeBox.textContent = text;
+          Prism.highlightElement(codeBox);
+        }
+      } catch (err) {
+        document.getElementById('code-box').textContent = `Could not fetch file: ${err.message}`;
+      }
+    }
+
+    function showCodeAtLine(filePath, line) {
+      switchTab('code');
+      loadCode(filePath, line).then(() => {
+        setTimeout(() => {
+          const targetEl = document.querySelector('.highlighted-line');
+          if (targetEl) {
+            targetEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          }
+        }, 150);
+      });
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+      if (tab === 'details') {
+        document.getElementById('tab-details-btn').classList.add('active');
+        document.getElementById('tab-details').classList.add('active');
+      } else {
+        document.getElementById('tab-code-btn').classList.add('active');
+        document.getElementById('tab-code').classList.add('active');
+      }
+    }
+
+    function changeSort(sort) {
+      currentSort = sort;
+      document.querySelectorAll('.sort-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById(`sort-${sort}`).classList.add('active');
+      renderFileList();
+    }
+
+    function onSearchChange() {
+      currentSearch = document.getElementById('search-box').value;
+      renderFileList();
+      renderGraph();
+    }
+
+    async function triggerReindex() {
+      const btn = document.getElementById('btn-reindex');
+      btn.disabled = true;
+      btn.innerHTML = '<span style="opacity:0.6">Indexing...</span>';
+      
+      try {
+        await fetch('/api/reindex', { method: 'POST' });
+        await loadData();
+
+        // Show banner
+        const banner = document.getElementById('notif-banner');
+        banner.classList.add('active');
+        setTimeout(() => {
+          banner.classList.remove('active');
+        }, 3000);
+      } catch (err) {
+        alert('Reindexing failed: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          Re-index Code
+        `;
+      }
+    }
+
+    // Load on init
+    loadData();
+  </script>
+</body>
+</html>

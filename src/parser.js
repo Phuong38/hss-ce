@@ -61,7 +61,22 @@ export function parseFile(filePath) {
     parsePython(content, symbols, imports);
   }
 
-  return { symbols, imports, summary };
+  // Calculate complexity heuristic (control flow keywords + symbol count)
+  const controlKeywords = [
+    /\bif\b/g, /\bfor\b/g, /\bwhile\b/g, /\bcatch\b/g,
+    /\bswitch\b/g, /\bcase\b/g, /\belif\b/g, /\bexcept\b/g,
+    /\btry\b/g
+  ];
+  let keywordMatches = 0;
+  controlKeywords.forEach(regex => {
+    const matches = content.match(regex);
+    if (matches) {
+      keywordMatches += matches.length;
+    }
+  });
+  const complexity = 1.0 + symbols.length * 1.5 + keywordMatches * 0.5;
+
+  return { symbols, imports, summary, complexity };
 }
 
 function parseJS(content, symbols, imports) {
@@ -312,5 +327,27 @@ export function determineLayer(filePath, symbols = []) {
 
   // 3. Logic/Service classification
   return 'service';
+}
+
+export function stripComments(content, ext) {
+  if (['.js', '.ts', '.jsx', '.tsx'].includes(ext)) {
+    let stripped = content.replace(/\/\*[\s\S]*?\*\//g, '');
+    stripped = stripped.replace(/(^|[^\:]|^\:[^\/])\/\/.*$/gm, '$1');
+    stripped = stripped.split('\n')
+      .map(line => line.trimEnd())
+      .filter(line => line !== '')
+      .join('\n');
+    return stripped;
+  } else if (ext === '.py') {
+    let stripped = content.replace(/"""[\s\S]*?"""/g, '');
+    stripped = stripped.replace(/'''[\s\S]*?'''/g, '');
+    stripped = stripped.replace(/#.*$/gm, '');
+    stripped = stripped.split('\n')
+      .map(line => line.trimEnd())
+      .filter(line => line !== '')
+      .join('\n');
+    return stripped;
+  }
+  return content;
 }
 

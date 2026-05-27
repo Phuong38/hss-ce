@@ -9,6 +9,80 @@ export class CodeIndexer {
   constructor(db, rootDir) {
     this.db = db;
     this.rootDir = path.resolve(rootDir);
+    this.ignorePatterns = this.loadIgnorePatterns();
+  }
+
+  loadIgnorePatterns() {
+    const ignoreFile = path.join(this.rootDir, '.hssceignore');
+    const patterns = [];
+    if (fs.existsSync(ignoreFile)) {
+      try {
+        const content = fs.readFileSync(ignoreFile, 'utf-8');
+        content.split('\n').forEach(line => {
+          const trimmed = line.trim();
+          if (trimmed && !trimmed.startsWith('#')) {
+            patterns.push(trimmed);
+          }
+        });
+      } catch (err) {
+        console.error('Failed to read .hssceignore:', err.message);
+      }
+    }
+    return patterns;
+  }
+
+  shouldIgnore(relativePath) {
+    const normRelative = relativePath.replace(/\\/g, '/');
+    const parts = normRelative.split('/');
+    
+    // Default ignore list
+    const defaults = ['node_modules', '.git', 'dist', 'build', '.hss-ce', '.codegraph', '.venv', 'venv', '.tmp', '.temp', 'temp'];
+    if (parts.some(part => defaults.includes(part) || part.includes('venv') || part.includes('graphify'))) {
+      return true;
+    }
+
+    for (const pattern of this.ignorePatterns) {
+      let cleanPattern = pattern.replace(/\\/g, '/').trim();
+      if (!cleanPattern) continue;
+
+      const isDirectoryOnly = cleanPattern.endsWith('/');
+      if (isDirectoryOnly) {
+        cleanPattern = cleanPattern.slice(0, -1);
+      }
+
+      const isRootOnly = cleanPattern.startsWith('/');
+      if (isRootOnly) {
+        cleanPattern = cleanPattern.slice(1);
+      }
+
+      const hasInternalSlash = cleanPattern.includes('/');
+
+      const regexStr = '^' + cleanPattern
+        .replace(/\./g, '\\.')
+        .replace(/\*\*/g, '.*')
+        .replace(/\*/g, '[^/]*') + '$';
+      
+      try {
+        const regex = new RegExp(regexStr);
+        if (!hasInternalSlash && !isRootOnly) {
+          const matchesSegment = parts.some(part => regex.test(part));
+          if (matchesSegment) return true;
+        } else {
+          if (regex.test(normRelative)) {
+            return true;
+          }
+          if (regex.test(normRelative.split('/')[0]) || (isDirectoryOnly && normRelative.startsWith(cleanPattern + '/'))) {
+            return true;
+          }
+        }
+      } catch (e) {
+        if (normRelative.startsWith(cleanPattern) || normRelative.endsWith(cleanPattern)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   // Calculate file hash for change detection
@@ -26,27 +100,13 @@ export class CodeIndexer {
     const files = fs.readdirSync(dir);
     
     for (const file of files) {
-      // Exclude common build/temp/venv folders
-      if (
-        file === 'node_modules' || 
-        file === '.git' || 
-        file === 'dist' || 
-        file === 'build' ||
-        file === '.codegraph' ||
-        file === '.hss-ce' ||
-        file === '.tmp' ||
-        file === '.temp' ||
-        file === 'temp' ||
-        file === 'venv' ||
-        file === '.venv' ||
-        file.includes('venv') ||
-        file.includes('graphify')
-      ) {
+      const filePath = path.join(dir, file);
+      const relativePath = path.relative(this.rootDir, filePath);
+      
+      if (this.shouldIgnore(relativePath)) {
         continue;
       }
 
-      const filePath = path.join(dir, file);
-      
       try {
         const stat = fs.statSync(filePath);
         if (stat.isDirectory()) {
@@ -199,9 +259,9 @@ export class CodeIndexer {
         this.db.clearFileSymbolsAndDependencies(relativePath);
 
         try {
-          const { symbols, imports, summary } = parseFile(filePath);
+          const { symbols, imports, summary, complexity } = parseFile(filePath);
           const layer = determineLayer(relativePath, symbols);
-          this.db.saveFile(relativePath, currentHash, layer, summary);
+          this.db.saveFile(relativePath, currentHash, layer, summary, complexity);
           
           // Save symbols
           for (const sym of symbols) {
@@ -318,6 +378,28 @@ export class CodeIndexer {
     const dependencies = this.db.db.prepare(`SELECT * FROM dependencies;`).all();
     const ranks = calculatePageRank(files, dependencies, 20, 0.85, personalization, gitWeights);
     this.db.updatePageRanks(ranks);
+
+    console.log('Calculating coupling and fragility metrics...');
+    const updatedFiles = this.db.getAllFiles();
+    const fanIn = {};
+    const fanOut = {};
+    updatedFiles.forEach(f => {
+      fanIn[f.path] = new Set();
+      fanOut[f.path] = new Set();
+    });
+
+    dependencies.forEach(d => {
+      if (fanIn[d.to_file]) fanIn[d.to_file].add(d.from_file);
+      if (fanOut[d.from_file]) fanOut[d.from_file].add(d.to_file);
+    });
+
+    for (const file of updatedFiles) {
+      const cIn = fanIn[file.path] ? fanIn[file.path].size : 0;
+      const cOut = fanOut[file.path] ? fanOut[file.path].size : 0;
+      const comp = file.complexity !== null && file.complexity !== undefined ? file.complexity : 1.0;
+      const frag = comp * (1.0 + cIn);
+      this.db.updateFileMetrics(file.path, comp, cIn, cOut, frag);
+    }
 
     console.log('Indexing completed successfully.');
   }

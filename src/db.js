@@ -32,6 +32,18 @@ export class CodeDatabase {
     try {
       this.db.exec(`ALTER TABLE files ADD COLUMN summary TEXT;`);
     } catch (_) {}
+    try {
+      this.db.exec(`ALTER TABLE files ADD COLUMN complexity REAL DEFAULT 1.0;`);
+    } catch (_) {}
+    try {
+      this.db.exec(`ALTER TABLE files ADD COLUMN coupling_in INTEGER DEFAULT 0;`);
+    } catch (_) {}
+    try {
+      this.db.exec(`ALTER TABLE files ADD COLUMN coupling_out INTEGER DEFAULT 0;`);
+    } catch (_) {}
+    try {
+      this.db.exec(`ALTER TABLE files ADD COLUMN fragility REAL DEFAULT 1.0;`);
+    } catch (_) {}
 
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS symbols (
@@ -62,17 +74,27 @@ export class CodeDatabase {
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_dependencies_symbol ON dependencies(symbol);`);
   }
 
-  saveFile(filePath, hash, layer = 'service', summary = null) {
+  saveFile(filePath, hash, layer = 'service', summary = null, complexity = 1.0) {
     const stmt = this.db.prepare(`
-      INSERT INTO files (path, hash, last_indexed, layer, summary)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO files (path, hash, last_indexed, layer, summary, complexity)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(path) DO UPDATE SET 
         hash = excluded.hash, 
         last_indexed = excluded.last_indexed,
         layer = excluded.layer,
-        summary = COALESCE(excluded.summary, files.summary);
+        summary = COALESCE(excluded.summary, files.summary),
+        complexity = excluded.complexity;
     `);
-    stmt.run(filePath, hash, Date.now(), layer, summary);
+    stmt.run(filePath, hash, Date.now(), layer, summary, complexity);
+  }
+
+  updateFileMetrics(filePath, complexity, couplingIn, couplingOut, fragility) {
+    const stmt = this.db.prepare(`
+      UPDATE files 
+      SET complexity = ?, coupling_in = ?, coupling_out = ?, fragility = ?
+      WHERE path = ?;
+    `);
+    stmt.run(complexity, couplingIn, couplingOut, fragility, filePath);
   }
 
   updateFileMetadata(filePath, layer, summary) {
@@ -151,7 +173,7 @@ export class CodeDatabase {
   }
 
   getSkeletonMap() {
-    const files = this.db.prepare(`SELECT path, pagerank, layer, summary FROM files ORDER BY pagerank DESC;`).all();
+    const files = this.db.prepare(`SELECT path, pagerank, layer, summary, complexity, coupling_in, coupling_out, fragility FROM files ORDER BY pagerank DESC;`).all();
     const map = [];
     for (const file of files) {
       const symbols = this.db.prepare(`
@@ -165,6 +187,10 @@ export class CodeDatabase {
         pagerank: file.pagerank,
         layer: file.layer || 'service',
         summary: file.summary || null,
+        complexity: file.complexity || 1.0,
+        coupling_in: file.coupling_in || 0,
+        coupling_out: file.coupling_out || 0,
+        fragility: file.fragility || 1.0,
         symbols: symbols.map(s => ({
           name: s.name,
           type: s.type,

@@ -3,6 +3,7 @@
 import { CodeDatabase } from './db.js';
 import { CodeIndexer } from './indexer.js';
 import { runMcpServer } from './mcp-server.js';
+import { stripComments } from './parser.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
@@ -221,6 +222,7 @@ const activeFlag = args.find(a => a.startsWith('--active='));
 const activeFiles = activeFlag ? activeFlag.split('=')[1].split(',') : null;
 
 const compact = args.includes('--compact');
+const noComments = args.includes('--no-comments');
 
 const budgetFlag = args.find(a => a.startsWith('--budget='));
 const tokenBudget = budgetFlag ? parseInt(budgetFlag.split('=')[1], 10) : 1000;
@@ -287,6 +289,19 @@ try {
       }
       // Start MCP Server
       await runMcpServer(dbPath, rootDir);
+      break;
+    }
+
+    case 'explore': {
+      // Ensure directory initialized
+      if (!fs.existsSync(dbPath)) {
+        console.error(`Index not found at: ${dbPath}. Run "index" command first.`);
+        process.exit(1);
+      }
+      const portFlag = args.find(a => a.startsWith('--port='));
+      const port = portFlag ? parseInt(portFlag.split('=')[1], 10) : 3000;
+      const { runExploreServer } = await import('./explore-server.js');
+      runExploreServer(dbPath, rootDir, port);
       break;
     }
 
@@ -1018,6 +1033,9 @@ node src/cli.js mcp .
         }
 
         content = redactSecrets(content);
+        if (noComments) {
+          content = stripComments(content, path.extname(file.path));
+        }
 
         const fileBlock = `<file path="${file.path}">\n${content}\n</file>\n`;
         const fileTokens = estimateTokens(fileBlock);
@@ -1064,11 +1082,13 @@ Commands:
   graph <path>             Print Mermaid file dependency graph.
   doc <path>               Generate README.md documentation with Mermaid graph.
   pack <path>              Pack files into structured XML under a token budget.
-                           Flags: --budget=1000, --output=file.txt
+                           Flags: --budget=1000, --output=file.txt, --no-comments
   enrich <path>            Enrich codebase index with AI-generated summaries.
                            Flags: --key=api_key (or set GEMINI_API_KEY), --force
   tour <path>              Generate step-by-step codebase onboarding tour.
   mcp <path>               Start MCP server (stdio transport).
+  explore <path>           Start interactive local codebase explorer dashboard.
+                           Flags: --port=3000
 `);
 }
 
