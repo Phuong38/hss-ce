@@ -200,6 +200,12 @@ export async function runMcpServer(dbPath, rootDir) {
           const symName = args?.symbolName;
           const results = db.getDefinition(symName);
           
+          if (results.length > 0) {
+            results.forEach(res => {
+              try { db.logSessionAction('get_definition', res.file_path, symName); } catch {}
+            });
+          }
+          
           return {
             content: [
               {
@@ -500,6 +506,10 @@ export async function runMcpServer(dbPath, rootDir) {
             };
           }
 
+          results.forEach(res => {
+            try { db.logSessionAction('get_symbol_context', res.file_path, symName); } catch {}
+          });
+
           let output = `=== Context for Symbol: ${symName} ===\n`;
 
           for (const res of results) {
@@ -561,6 +571,10 @@ export async function runMcpServer(dbPath, rootDir) {
             };
           }
 
+          definitions.forEach(res => {
+            try { db.logSessionAction('get_enriched_context', res.file_path, symName); } catch {}
+          });
+
           let output = `=== Graph-Enriched Context (cAST) for Symbol: ${symName} ===\n`;
 
           for (const def of definitions) {
@@ -614,17 +628,17 @@ export async function runMcpServer(dbPath, rootDir) {
     <coupling_out>${couplingOut} (how many files this file depends on)</coupling_out>
     <fragility>${fragility.toFixed(1)} (higher means change is more risky)</fragility>
   </metrics>
-  \${summary ? \`<summary>\${summary}</summary>\` : ''}
+  ${summary ? `<summary>${summary}</summary>` : ''}
   
   <code_definition>
-\${codeSnippet}  </code_definition>
+${codeSnippet}  </code_definition>
 
   <upstream_callers>
-\${callers.length > 0 ? callers.map(c => \`    <caller file="\${c.file_path}" symbol="\${c.symbol}" />\`).join('\\n') : '    <!-- No callers found -->'}
+${callers.length > 0 ? callers.map(c => `    <caller file="${c.file_path}" symbol="${c.symbol}" />`).join('\n') : '    <!-- No callers found -->'}
   </upstream_callers>
 
   <downstream_dependencies>
-\${dependencies.length > 0 ? dependencies.map(d => \`    <dependency file="\${d.to_file}" symbol="\${d.symbol}" />\`).join('\\n') : '    <!-- No external dependencies found -->'}
+${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_file}" symbol="${d.symbol}" />`).join('\n') : '    <!-- No external dependencies found -->'}
   </downstream_dependencies>
 </symbol_definition>
 `;

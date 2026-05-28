@@ -366,12 +366,25 @@ export class CodeIndexer {
       // Ignore if git status fails
     }
 
-    if (gitPersonalization.length > 0) {
-      if (!personalization) {
-        personalization = gitPersonalization;
-      } else {
-        personalization = Array.from(new Set([...personalization, ...gitPersonalization]));
+    // Auto-detect files queried via MCP recently to boost personalization
+    let sessionPersonalization = [];
+    try {
+      if (typeof this.db.getRecentActiveFiles === 'function') {
+        sessionPersonalization = this.db.getRecentActiveFiles(24);
       }
+    } catch {
+      // Ignore database errors
+    }
+
+    let combinedPersonalization = [];
+    if (personalization) {
+      combinedPersonalization = [...personalization];
+    }
+    combinedPersonalization = [...combinedPersonalization, ...gitPersonalization, ...sessionPersonalization];
+    combinedPersonalization = Array.from(new Set(combinedPersonalization)).filter(Boolean);
+
+    if (combinedPersonalization.length > 0) {
+      personalization = combinedPersonalization;
     }
 
     const files = this.db.getAllFiles();

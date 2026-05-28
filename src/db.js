@@ -67,11 +67,22 @@ export class CodeDatabase {
       );
     `);
 
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS session_actions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action_type TEXT NOT NULL,
+        file_path TEXT,
+        symbol TEXT,
+        timestamp INTEGER NOT NULL
+      );
+    `);
+
     // Create indexes for fast queries
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_symbols_file_path ON symbols(file_path);`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_dependencies_from ON dependencies(from_file);`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_dependencies_symbol ON dependencies(symbol);`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_session_actions_timestamp ON session_actions(timestamp);`);
   }
 
   saveFile(filePath, hash, layer = 'service', summary = null, complexity = 1.0) {
@@ -104,6 +115,25 @@ export class CodeDatabase {
       WHERE path = ?;
     `);
     stmt.run(layer, summary, filePath);
+  }
+
+  logSessionAction(actionType, filePath, symbol = null) {
+    const stmt = this.db.prepare(`
+      INSERT INTO session_actions (action_type, file_path, symbol, timestamp)
+      VALUES (?, ?, ?, ?);
+    `);
+    stmt.run(actionType, filePath, symbol, Date.now());
+  }
+
+  getRecentActiveFiles(limitHours = 24) {
+    const cutOff = Date.now() - (limitHours * 60 * 60 * 1000);
+    const stmt = this.db.prepare(`
+      SELECT DISTINCT file_path 
+      FROM session_actions 
+      WHERE timestamp >= ? AND file_path IS NOT NULL;
+    `);
+    const rows = stmt.all(cutOff);
+    return rows.map(r => r.file_path);
   }
 
   deleteFile(filePath) {
