@@ -19,6 +19,7 @@ HSS-CE is **not** a magical AI assistant that writes code for you. It is a struc
 * **Eliminate Token Waste:** Coding agents (like Claude Code, Cursor, Aider) often read entire files or directory trees to understand import flows. HSS-CE exposes an MCP server that lets agents query precise skeletal structures and dependency trees under strict token budgets.
 * **Precise Symbol Navigation:** Instead of performing noisy text searches (like raw `grep` or `ripgrep`), agents use structured database queries to resolve exact function definitions and caller locations.
 * **Automated Redaction (Secret Guard):** Before packing codebase files to send to LLM context, HSS-CE automatically redacts credentials, private keys, and API tokens, preventing security leaks.
+* **Git-Aware Ignore System:** Automatically respects `.gitignore` rules in addition to local `.hssceignore` patterns, ensuring build artifacts, dependencies, and temporary files are excluded from the index.
 
 ### 3. Current Limitations & What It is Not
 * **Regex-based, not AST-based:** HSS-CE uses fast, lightweight regex patterns to extract imports and symbols. While this makes it extremely fast and multi-language out-of-the-box, it may occasionally miss highly dynamic, metaprogrammed, or complex syntactical structures compared to a full abstract syntax tree (AST) compiler.

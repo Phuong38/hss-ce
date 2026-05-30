@@ -13,11 +13,13 @@ export class CodeIndexer {
   }
 
   loadIgnorePatterns() {
-    const ignoreFile = path.join(this.rootDir, '.hssceignore');
     const patterns = [];
-    if (fs.existsSync(ignoreFile)) {
+    
+    // Read .hssceignore
+    const hssceIgnoreFile = path.join(this.rootDir, '.hssceignore');
+    if (fs.existsSync(hssceIgnoreFile)) {
       try {
-        const content = fs.readFileSync(ignoreFile, 'utf-8');
+        const content = fs.readFileSync(hssceIgnoreFile, 'utf-8');
         content.split('\n').forEach(line => {
           const trimmed = line.trim();
           if (trimmed && !trimmed.startsWith('#')) {
@@ -28,7 +30,24 @@ export class CodeIndexer {
         console.error('Failed to read .hssceignore:', err.message);
       }
     }
-    return patterns;
+
+    // Read .gitignore
+    const gitIgnoreFile = path.join(this.rootDir, '.gitignore');
+    if (fs.existsSync(gitIgnoreFile)) {
+      try {
+        const content = fs.readFileSync(gitIgnoreFile, 'utf-8');
+        content.split('\n').forEach(line => {
+          const trimmed = line.trim();
+          if (trimmed && !trimmed.startsWith('#')) {
+            patterns.push(trimmed);
+          }
+        });
+      } catch (err) {
+        console.error('Failed to read .gitignore:', err.message);
+      }
+    }
+
+    return Array.from(new Set(patterns));
   }
 
   shouldIgnore(relativePath) {
