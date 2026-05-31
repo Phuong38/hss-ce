@@ -171,6 +171,39 @@ export async function runMcpServer(dbPath, rootDir) {
             },
             required: ['symbolName']
           }
+        },
+        {
+          name: 'search_symbols',
+          description: 'Search for symbol definitions matching a query pattern (fuzzy search).',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'The search query/pattern to match against symbol names (e.g. "auth")'
+              }
+            },
+            required: ['query']
+          }
+        },
+        {
+          name: 'search_code',
+          description: 'Search for a text snippet or regular expression pattern across the indexed files in the codebase.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'The text snippet or regex pattern to search for'
+              },
+              isRegex: {
+                type: 'boolean',
+                description: 'Whether to treat the query as a regular expression (default false)',
+                default: false
+              }
+            },
+            required: ['query']
+          }
         }
       ]
     };
@@ -649,6 +682,81 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
               {
                 type: 'text',
                 text: output.trim()
+              }
+            ]
+          };
+        }
+
+        case 'search_symbols': {
+          const query = args?.query;
+          if (!query) {
+            throw new Error('Query parameter is required');
+          }
+          const results = db.searchSymbols(query);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: results.length > 0
+                  ? JSON.stringify(results, null, 2)
+                  : `No symbols matching "${query}" found.`
+              }
+            ]
+          };
+        }
+
+        case 'search_code': {
+          const query = args?.query;
+          const isRegex = !!args?.isRegex;
+          if (!query) {
+            throw new Error('Query parameter is required');
+          }
+
+          const files = db.getAllFiles();
+          const results = [];
+          
+          let searchRegex;
+          if (isRegex) {
+            searchRegex = new RegExp(query, 'i');
+          }
+
+          for (const file of files) {
+            const absPath = path.join(rootDir, file.path);
+            if (!fs.existsSync(absPath)) continue;
+
+            try {
+              const fileContent = fs.readFileSync(absPath, 'utf-8');
+              const lines = fileContent.split('\n');
+              
+              lines.forEach((lineContent, idx) => {
+                const lineNum = idx + 1;
+                let isMatch = false;
+                if (isRegex) {
+                  isMatch = searchRegex.test(lineContent);
+                } else {
+                  isMatch = lineContent.toLowerCase().includes(query.toLowerCase());
+                }
+
+                if (isMatch) {
+                  results.push({
+                    filePath: file.path,
+                    line: lineNum,
+                    content: lineContent.trim()
+                  });
+                }
+              });
+            } catch (err) {
+              // Ignore reading errors for single files
+            }
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: results.length > 0
+                  ? JSON.stringify(results.slice(0, 100), null, 2)
+                  : `No code occurrences matching "${query}" found.`
               }
             ]
           };

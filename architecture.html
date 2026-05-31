@@ -165,6 +165,16 @@
       width: 100%;
       height: 100%;
     }
+    #mermaid-target svg .edgePath path {
+      stroke: #6366f1 !important;
+      stroke-width: 1.5px !important;
+      transition: stroke 0.25s ease, stroke-width 0.25s ease, opacity 0.25s ease, filter 0.25s ease;
+    }
+    #mermaid-target svg marker path,
+    #mermaid-target svg marker polygon {
+      fill: #6366f1 !important;
+      transition: fill 0.25s ease;
+    }
 
     .details-panel {
       border-right: none;
@@ -247,30 +257,58 @@
   </div>
 
   <script>
-    const data = [{"path":"src/db.js","pagerank":1,"layer":"storage","summary":null,"symbols":[{"name":"CodeDatabase","type":"class","signature":"class CodeDatabase"}]},{"path":"src/indexer.js","pagerank":1,"layer":"service","summary":null,"symbols":[{"name":"CodeIndexer","type":"class","signature":"class CodeIndexer"}]},{"path":"src/pagerank.js","pagerank":0.971821599458561,"layer":"service","summary":null,"symbols":[{"name":"calculatePageRank","type":"function","signature":"function calculatePageRank(files, dependencies, iterations = 20, d = 0.85, personalization = null, gitWeights = null)"}]},{"path":"src/parser.js","pagerank":0.971821599458561,"layer":"service","summary":null,"symbols":[{"name":"getLineNumber","type":"function","signature":"function getLineNumber(content, index)"},{"name":"parseFile","type":"function","signature":"function parseFile(filePath)"},{"name":"parseJS","type":"function","signature":"function parseJS(content, symbols, imports)"},{"name":"parsePython","type":"function","signature":"function parsePython(content, symbols, imports)"},{"name":"determineLayer","type":"function","signature":"function determineLayer(filePath, symbols = [])"}]},{"path":"src/mcp-server.js","pagerank":0.7017543859681328,"layer":"service","summary":null,"symbols":[{"name":"runMcpServer","type":"function","signature":"function runMcpServer(dbPath, rootDir)"},{"name":"makeSafeId","type":"function","signature":"const makeSafeId = (p) => ..."},{"name":"estimateTokens","type":"function","signature":"const estimateTokens = (str) => ..."},{"name":"estimateTokens","type":"function","signature":"const estimateTokens = (str) => ..."},{"name":"redactSecrets","type":"function","signature":"const redactSecrets = (content) => ..."}]},{"path":"src/integrate.js","pagerank":0.6777712779533026,"layer":"service","summary":null,"symbols":[{"name":"askQuestion","type":"function","signature":"const askQuestion = (query) => ..."},{"name":"ensureDir","type":"function","signature":"function ensureDir(dir)"},{"name":"writeOrAppend","type":"function","signature":"function writeOrAppend(filePath, content)"},{"name":"generateAgentRules","type":"function","signature":"function generateAgentRules(targetProject, cliPath)"},{"name":"main","type":"function","signature":"function main()"}]},{"path":"src/cli.js","pagerank":0.5468215994577311,"layer":"entrypoint","summary":null,"symbols":[{"name":"makeSafeId","type":"function","signature":"const makeSafeId = (p) => ..."},{"name":"generateMermaidGraph","type":"function","signature":"function generateMermaidGraph(deps, isMarkdown = false)"},{"name":"generateLayeredMermaidGraph","type":"function","signature":"function generateLayeredMermaidGraph(deps, map, isMarkdown = false)"},{"name":"estimateTokens","type":"function","signature":"function estimateTokens(str)"},{"name":"redactSecrets","type":"function","signature":"function redactSecrets(content)"},{"name":"formatCompactMap","type":"function","signature":"function formatCompactMap(map, tokenBudget)"},{"name":"filterFiles","type":"function","signature":"function filterFiles()"},{"name":"highlightNodeInSvg","type":"function","signature":"function highlightNodeInSvg(filePath)"},{"name":"selectFile","type":"function","signature":"function selectFile(index)"},{"name":"printUsage","type":"function","signature":"function printUsage()"},{"name":"formatSkeletonMap","type":"function","signature":"function formatSkeletonMap(map)"}]},{"path":"src/enrich.js","pagerank":0.3229616454707087,"layer":"service","summary":null,"symbols":[{"name":"enrichCodebase","type":"function","signature":"function enrichCodebase(db, rootDir, apiKey, force = false)"}]}];
+    const data = [{"path":"src/indexer.js","pagerank":1,"layer":"service","summary":null,"complexity":46.5,"coupling_in":3,"coupling_out":2,"fragility":186,"symbols":[{"name":"CodeIndexer","type":"class","signature":"class CodeIndexer"}]},{"path":"src/parser.js","pagerank":0.3844971326301337,"layer":"service","summary":null,"complexity":29.5,"coupling_in":4,"coupling_out":0,"fragility":147.5,"symbols":[{"name":"getLineNumber","type":"function","signature":"function getLineNumber(content, index)"},{"name":"extractSummary","type":"function","signature":"function extractSummary(content, ext)"},{"name":"parseFile","type":"function","signature":"function parseFile(filePath)"},{"name":"parseJS","type":"function","signature":"function parseJS(content, symbols, imports)"},{"name":"parsePython","type":"function","signature":"function parsePython(content, symbols, imports)"},{"name":"determineLayer","type":"function","signature":"function determineLayer(filePath, symbols = [])"},{"name":"stripComments","type":"function","signature":"function stripComments(content, ext)"}]},{"path":"src/pagerank.js","pagerank":0.1671022414429308,"layer":"service","summary":null,"complexity":9.5,"coupling_in":1,"coupling_out":0,"fragility":19,"symbols":[{"name":"calculatePageRank","type":"function","signature":"function calculatePageRank(files, dependencies, iterations = 20, d = 0.85, personalization = null, gitWeights = null)"}]},{"path":"src/mcp-server.js","pagerank":0.12474038752514555,"layer":"service","summary":null,"complexity":45,"coupling_in":1,"coupling_out":3,"fragility":90,"symbols":[{"name":"runMcpServer","type":"function","signature":"function runMcpServer(dbPath, rootDir)"},{"name":"makeSafeId","type":"function","signature":"const makeSafeId = (p) => ..."},{"name":"estimateTokens","type":"function","signature":"const estimateTokens = (str) => ..."},{"name":"estimateTokens","type":"function","signature":"const estimateTokens = (str) => ..."},{"name":"redactSecrets","type":"function","signature":"const redactSecrets = (content) => ..."}]},{"path":"src/db.js","pagerank":0.09226896704206376,"layer":"storage","summary":null,"complexity":11,"coupling_in":3,"coupling_out":0,"fragility":44,"symbols":[{"name":"CodeDatabase","type":"class","signature":"class CodeDatabase"}]},{"path":"src/cli.js","pagerank":0.09184262896807631,"layer":"entrypoint","summary":null,"complexity":74,"coupling_in":0,"coupling_out":4,"fragility":74,"symbols":[{"name":"makeSafeId","type":"function","signature":"const makeSafeId = (p) => ..."},{"name":"getGroupForPath","type":"function","signature":"function getGroupForPath(filePath)"},{"name":"generateMermaidGraph","type":"function","signature":"function generateMermaidGraph(deps, isMarkdown = false)"},{"name":"generateLayeredMermaidGraph","type":"function","signature":"function generateLayeredMermaidGraph(deps, map, isMarkdown = false)"},{"name":"getGroupIcon","type":"function","signature":"const getGroupIcon = (groupName) => ..."},{"name":"getNodeIcon","type":"function","signature":"const getNodeIcon = (layer) => ..."},{"name":"renderLayer","type":"function","signature":"const renderLayer = (layerId, displayName, files, layerClass) => ..."},{"name":"estimateTokens","type":"function","signature":"function estimateTokens(str)"},{"name":"redactSecrets","type":"function","signature":"function redactSecrets(content)"},{"name":"formatCompactMap","type":"function","signature":"function formatCompactMap(map, tokenBudget)"},{"name":"filterFiles","type":"function","signature":"function filterFiles()"},{"name":"highlightNodeInSvg","type":"function","signature":"function highlightNodeInSvg(filePath)"},{"name":"selectFile","type":"function","signature":"function selectFile(index)"},{"name":"printUsage","type":"function","signature":"function printUsage()"},{"name":"formatSkeletonMap","type":"function","signature":"function formatSkeletonMap(map)"}]},{"path":"src/explore-server.js","pagerank":0.055700747147643594,"layer":"service","summary":null,"complexity":11,"coupling_in":0,"coupling_out":2,"fragility":11,"symbols":[{"name":"runExploreServer","type":"function","signature":"function runExploreServer(dbPath, rootDir, port = 3000)"},{"name":"makeSafeId","type":"function","signature":"const makeSafeId = (p) => ..."}]},{"path":"src/integrate.js","pagerank":0.045921314484038155,"layer":"service","summary":null,"complexity":33.5,"coupling_in":0,"coupling_out":0,"fragility":33.5,"symbols":[{"name":"askQuestion","type":"function","signature":"const askQuestion = (query) => ..."},{"name":"ensureDir","type":"function","signature":"function ensureDir(dir)"},{"name":"writeOrAppend","type":"function","signature":"function writeOrAppend(filePath, content)"},{"name":"generateAgentRules","type":"function","signature":"function generateAgentRules(targetProject, cliPath)"},{"name":"setupGitHooks","type":"function","signature":"function setupGitHooks(targetProject, cliPath)"},{"name":"main","type":"function","signature":"function main()"}]},{"path":"src/enrich.js","pagerank":0.03451982018875097,"layer":"service","summary":null,"complexity":6,"coupling_in":0,"coupling_out":1,"fragility":6,"symbols":[{"name":"enrichCodebase","type":"function","signature":"function enrichCodebase(db, rootDir, apiKey, force = false)"}]}];
     const mermaidDef = `graph TD
-  subgraph Entrypoints
-    src_cli_js["src/cli.js"]
+  classDef entrypoint fill:#311b22,stroke:#f43f5e,stroke-width:2px,color:#fda4af;
+  classDef service fill:#0f1d30,stroke:#38bdf8,stroke-width:2px,color:#7dd3fc;
+  classDef storage fill:#06261a,stroke:#34d399,stroke-width:2px,color:#a7f3d0;
+
+  subgraph Entrypoints["🚀 Entrypoints"]
+    subgraph src["📂 src"]
+      src_cli_js["🚀 cli.js"]
+    end
   end
-  subgraph Services
-    src_indexer_js["src/indexer.js"]
-    src_pagerank_js["src/pagerank.js"]
-    src_parser_js["src/parser.js"]
-    src_mcp_server_js["src/mcp-server.js"]
-    src_integrate_js["src/integrate.js"]
-    src_enrich_js["src/enrich.js"]
+  class src_cli_js entrypoint;
+
+  subgraph Services["⚙️ Services"]
+    subgraph src["📂 src"]
+      src_indexer_js["⚙️ indexer.js"]
+      src_parser_js["⚙️ parser.js"]
+      src_pagerank_js["⚙️ pagerank.js"]
+      src_mcp_server_js["⚙️ mcp-server.js"]
+      src_explore_server_js["⚙️ explore-server.js"]
+      src_integrate_js["⚙️ integrate.js"]
+      src_enrich_js["⚙️ enrich.js"]
+    end
   end
-  subgraph Storage
-    src_db_js["src/db.js"]
+  class src_indexer_js service;
+  class src_parser_js service;
+  class src_pagerank_js service;
+  class src_mcp_server_js service;
+  class src_explore_server_js service;
+  class src_integrate_js service;
+  class src_enrich_js service;
+
+  subgraph Storage["💾 Storage"]
+    subgraph src["📂 src"]
+      src_db_js["💾 db.js"]
+    end
   end
+  class src_db_js storage;
+
+  src_enrich_js -->|"parseFile"| src_parser_js
   src_cli_js -->|"CodeDatabase"| src_db_js
   src_cli_js -->|"CodeIndexer"| src_indexer_js
   src_cli_js -->|"runMcpServer"| src_mcp_server_js
+  src_cli_js -->|"stripComments"| src_parser_js
+  src_explore_server_js -->|"CodeDatabase"| src_db_js
+  src_explore_server_js -->|"CodeIndexer"| src_indexer_js
   src_indexer_js -->|"parseFile"| src_parser_js
   src_indexer_js -->|"determineLayer"| src_parser_js
   src_indexer_js -->|"calculatePageRank"| src_pagerank_js
   src_mcp_server_js -->|"CodeDatabase"| src_db_js
   src_mcp_server_js -->|"CodeIndexer"| src_indexer_js
+  src_mcp_server_js -->|"stripComments"| src_parser_js
 `;
     const rootPath = "/Users/phuonglt/Projects/hss-ce";
 
@@ -300,7 +338,8 @@
         // Add node click listeners
         svgElement.querySelectorAll('.node').forEach(nodeEl => {
           nodeEl.style.cursor = 'pointer';
-          nodeEl.addEventListener('click', () => {
+          nodeEl.addEventListener('click', (e) => {
+            e.stopPropagation();
             const idAttr = nodeEl.id || '';
             const match = idAttr.match(/flowchart-([a-zA-Z0-9_]+)/) || idAttr.match(/([a-zA-Z0-9_]+)/);
             const nodeId = match ? match[1] : '';
@@ -309,6 +348,15 @@
               selectFile(foundIndex);
             }
           });
+        });
+
+        // Clear selection on background click
+        svgElement.addEventListener('click', () => {
+          const cards = document.querySelectorAll('.file-card');
+          cards.forEach(c => c.classList.remove('active'));
+          const detailsContainer = document.getElementById('details-content');
+          detailsContainer.innerHTML = '<div style="color:var(--text-muted);text-align:center;margin-top:2rem;">Click a file to view details</div>';
+          highlightNodeInSvg(null);
         });
       }
     }).catch(err => console.error(err));
@@ -349,40 +397,146 @@
     }
 
     function highlightNodeInSvg(filePath) {
-      const safeId = filePath.replace(/[^a-zA-Z0-9]/g, '_');
       const svg = document.querySelector('#mermaid-target svg');
       if (!svg) return;
 
-      // Reset all nodes and edges opacity
-      svg.querySelectorAll('.node').forEach(el => el.style.opacity = '0.3');
-      svg.querySelectorAll('.edgePath').forEach(el => el.style.opacity = '0.1');
-      svg.querySelectorAll('.edgeLabel').forEach(el => el.style.opacity = '0.1');
+      const safeId = filePath ? filePath.replace(/[^a-zA-Z0-9]/g, '_') : null;
+
+      // Reset all nodes and edges to default state
+      svg.querySelectorAll('.node').forEach(el => {
+        el.style.opacity = '1';
+        el.style.removeProperty('color');
+        const shape = el.querySelector('rect, polygon, circle, ellipse, path');
+        if (shape) {
+          shape.style.removeProperty('fill');
+          shape.style.removeProperty('stroke');
+          shape.style.removeProperty('stroke-width');
+          shape.style.removeProperty('filter');
+        }
+        el.querySelectorAll('text, tspan').forEach(t => {
+          t.style.removeProperty('fill');
+          t.style.removeProperty('color');
+        });
+        el.querySelectorAll('span, div, p').forEach(t => {
+          t.style.removeProperty('color');
+        });
+      });
+
+      svg.querySelectorAll('path.flowchart-link').forEach(pathEl => {
+        pathEl.style.opacity = '1';
+        pathEl.style.removeProperty('stroke');
+        pathEl.style.removeProperty('stroke-width');
+        pathEl.style.removeProperty('filter');
+      });
+      svg.querySelectorAll('.edgeLabel').forEach(el => el.style.opacity = '1');
+
+      if (!safeId) return;
+
+      // Fade non-connected elements by default
+      svg.querySelectorAll('.node').forEach(el => {
+        const idAttr = el.id || '';
+        const match = idAttr.match(/flowchart-([a-zA-Z0-9_]+)/) || idAttr.match(/([a-zA-Z0-9_]+)/);
+        const nodeId = match ? match[1] : '';
+        if (nodeId !== safeId) {
+          el.style.opacity = '0.08';
+        }
+      });
+      svg.querySelectorAll('path.flowchart-link').forEach(pathEl => {
+        pathEl.style.opacity = '0.03';
+      });
+      svg.querySelectorAll('.edgeLabel').forEach(el => el.style.opacity = '0.03');
 
       // Find clicked node
       const nodeEl = svg.querySelector(`.node[id*="${safeId}"]`) || svg.querySelector(`[id^="${safeId}"]`);
       if (nodeEl) {
+        // Highlight active node
         nodeEl.style.opacity = '1';
+        nodeEl.parentNode.appendChild(nodeEl);
+        const activeShape = nodeEl.querySelector('rect, polygon, circle, ellipse, path');
+        if (activeShape) {
+          activeShape.style.setProperty('fill', '#fbbf24', 'important'); // Solid gold background
+          activeShape.style.setProperty('stroke', '#d97706', 'important'); // Gold/orange border
+          activeShape.style.setProperty('stroke-width', '4px', 'important');
+          activeShape.style.setProperty('filter', 'drop-shadow(0 0 10px rgba(251, 191, 36, 0.8))', 'important');
+        }
+        nodeEl.style.setProperty('color', '#0b0f19', 'important');
+        nodeEl.querySelectorAll('text, tspan').forEach(t => {
+          t.style.setProperty('fill', '#0b0f19', 'important');
+          t.style.setProperty('color', '#0b0f19', 'important');
+        });
+        nodeEl.querySelectorAll('span, div, p').forEach(t => {
+          t.style.setProperty('color', '#0b0f19', 'important');
+        });
         
-        svg.querySelectorAll('.edgePath').forEach(el => {
-          const classList = el.className.baseVal || '';
-          if (classList.includes(safeId)) {
-            el.style.opacity = '1';
-            const classes = classList.split(' ');
-            classes.forEach(cls => {
-              if (cls.startsWith('LS-') || cls.startsWith('LE-')) {
-                const targetNodeId = cls.slice(3);
-                const connectedNode = svg.querySelector(`.node[id*="${targetNodeId}"]`);
-                if (connectedNode) {
-                  connectedNode.style.opacity = '0.8';
+        // Highlight connected edges and nodes using their generated SVG path IDs
+        svg.querySelectorAll('path.flowchart-link').forEach(pathEl => {
+          if (pathEl && pathEl.id) {
+            const idx = pathEl.id.indexOf('-L_');
+            if (idx !== -1) {
+              let parts = pathEl.id.slice(idx + 3);
+              const lastUnderscoreIdx = parts.lastIndexOf('_');
+              if (lastUnderscoreIdx !== -1) {
+                parts = parts.slice(0, lastUnderscoreIdx);
+                
+                let isConnected = false;
+                let targetNodeId = null;
+                const allNodeIds = data.map(f => f.path.replace(/[^a-zA-Z0-9]/g, '_'));
+                
+                if (parts.startsWith(safeId + '_')) {
+                  const candidate = parts.slice(safeId.length + 1);
+                  if (allNodeIds.includes(candidate)) {
+                    isConnected = true;
+                    targetNodeId = candidate;
+                  }
+                }
+                
+                if (!isConnected && parts.endsWith('_' + safeId)) {
+                  const candidate = parts.slice(0, parts.length - safeId.length - 1);
+                  if (allNodeIds.includes(candidate)) {
+                    isConnected = true;
+                    targetNodeId = candidate;
+                  }
+                }
+                
+                if (isConnected) {
+                  pathEl.style.opacity = '1';
+                  pathEl.style.setProperty('stroke', '#06b6d4', 'important'); // Glowing electric cyan
+                  pathEl.style.setProperty('stroke-width', '4px', 'important');
+                  pathEl.style.setProperty('filter', 'drop-shadow(0 0 6px rgba(6, 182, 212, 0.8))', 'important');
+                  
+                  // Bring edge parent group to front
+                  const edgeGroup = pathEl.closest('g');
+                  if (edgeGroup && edgeGroup !== svg) {
+                    edgeGroup.parentNode.appendChild(edgeGroup);
+                  }
+                  
+                  // Highlight connected nodes
+                  const connectedNode = svg.querySelector(`.node[id*="${targetNodeId}"]`) || svg.querySelector(`[id^="${targetNodeId}"]`);
+                  if (connectedNode) {
+                    connectedNode.style.opacity = '1';
+                    connectedNode.parentNode.appendChild(connectedNode); // Bring connected node to front
+                    
+                    const connShape = connectedNode.querySelector('rect, polygon, circle, ellipse, path');
+                    if (connShape) {
+                      connShape.style.setProperty('fill', '#0ea5e9', 'important'); // Solid sky blue background
+                      connShape.style.setProperty('stroke', '#0284c7', 'important'); // Vivid sky blue border
+                      connShape.style.setProperty('stroke-width', '3px', 'important');
+                      connShape.style.setProperty('filter', 'drop-shadow(0 0 8px rgba(14, 165, 233, 0.6))', 'important');
+                    }
+                    connectedNode.style.setProperty('color', '#ffffff', 'important');
+                    connectedNode.querySelectorAll('text, tspan').forEach(t => {
+                      t.style.setProperty('fill', '#ffffff', 'important');
+                      t.style.setProperty('color', '#ffffff', 'important');
+                    });
+                    connectedNode.querySelectorAll('span, div, p').forEach(t => {
+                      t.style.setProperty('color', '#ffffff', 'important');
+                    });
+                  }
                 }
               }
-            });
+            }
           }
         });
-      } else {
-        svg.querySelectorAll('.node').forEach(el => el.style.opacity = '1');
-        svg.querySelectorAll('.edgePath').forEach(el => el.style.opacity = '1');
-        svg.querySelectorAll('.edgeLabel').forEach(el => el.style.opacity = '1');
       }
     }
 
@@ -408,7 +562,7 @@
           <span class="layer-badge ${file.layer}">${file.layer.toUpperCase()}</span>
           <span style="font-size:0.75rem;color:var(--text-muted);">PageRank: ${file.pagerank.toFixed(4)}</span>
         </div>
-        ${file.summary ? \`<p style="font-size:0.85rem;color:var(--text-main);line-height:1.4;background:rgba(255,255,255,0.02);padding:0.75rem;border-radius:6px;border:1px solid var(--border-color);margin-top:0.5rem;">${file.summary}</p>\` : ''}
+        ${file.summary ? `<p style="font-size:0.85rem;color:var(--text-main);line-height:1.4;background:rgba(255,255,255,0.02);padding:0.75rem;border-radius:6px;border:1px solid var(--border-color);margin-top:0.5rem;">${file.summary}</p>` : ''}
       `;
       detailsContainer.appendChild(titleSec);
 
@@ -429,7 +583,7 @@
               <span class="symbol-type ${typeClass}">${sym.type}</span>
               <strong style="color:var(--text-main)">${sym.name}</strong>
             </div>
-            ${sym.signature ? \`<div class="symbol-sig">${sym.signature}</div>\` : ''}
+            ${sym.signature ? `<div class="symbol-sig">${sym.signature}</div>` : ''}
           `;
           symSec.appendChild(item);
         });

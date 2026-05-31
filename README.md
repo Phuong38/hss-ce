@@ -40,7 +40,9 @@ Imagine you need to modify a database schema file `src/db.js` in a large codebas
 When you ask your agent (e.g. Claude Code or Cursor): *"Find all callers of the authenticate function and tell me where it is defined"*, the agent bypasses slow search loops and makes a fast MCP tool call:
 1. Agent invokes `get_definition(symbol: "authenticate")` → HSS-CE queries SQLite and returns the exact file path and signature.
 2. Agent invokes `get_callers(symbol: "authenticate")` → HSS-CE returns a clean list of files and lines referencing the function.
-3. The agent reads only those specific files, completing the task with 90% fewer tokens and much higher accuracy.
+3. Agent invokes `search_symbols(query: "auth")` → HSS-CE fuzzy matches against indexed symbols and returns definition details.
+4. Agent invokes `search_code(query: "TODO: fix", isRegex: false)` → HSS-CE performs a fast, ignore-aware real-time search of matching code snippets on disk.
+5. The agent reads only those specific files, completing the task with 90% fewer tokens and much higher accuracy.
 
 ---
 
@@ -106,6 +108,8 @@ If you prefer using the terminal manually, HSS-CE provides the following command
 | `hss-ce doc <path>` | `hss-ce doc .` | Regenerate `CODEBASE.md` and `architecture.html` dashboard. |
 | `hss-ce tour <path>` | `hss-ce tour .` | Display a step-by-step onboarding walkthrough tour of the codebase. |
 | `hss-ce query <path> <sym>` | `hss-ce query . validateUser` | Instantly lookup definition and callers for a specific symbol. |
+| `hss-ce search <path> <query>` | `hss-ce search . auth` | Fuzzy search symbol names matching query pattern. |
+| `hss-ce search-code <path> <q>` | `hss-ce search-code . TODO --regex` | Search text snippet/regex across indexed files. Add `--regex` for regex pattern. |
 | `hss-ce pack <path>` | `hss-ce pack . --budget=2000` | Package source files into structured XML for LLM context, with secret redacting. |
 | `hss-ce enrich <path>` | `hss-ce enrich .` | (Optional) Fetch AI-generated summaries via Gemini API (requires `GEMINI_API_KEY`). |
 

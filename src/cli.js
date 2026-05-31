@@ -1059,6 +1059,81 @@ node src/cli.js mcp .
       break;
     }
 
+    case 'search': {
+      const db = new CodeDatabase(dbPath);
+      const query = args.slice(1).filter(a => !a.startsWith('-'))[1];
+      if (!query) {
+        console.error('Usage: hss-ce search <path> <query>');
+        process.exit(1);
+      }
+      const results = db.searchSymbols(query);
+      if (results.length === 0) {
+        console.log(`No symbols matching "${query}" found.`);
+      } else {
+        console.log(`=== SYMBOLS MATCHING "${query}" ===`);
+        results.forEach(sym => {
+          console.log(`\n📄 [${sym.type.toUpperCase()}] ${sym.name} (File: ${sym.file_path}:${sym.start_line})`);
+          if (sym.signature) console.log(`   Signature: ${sym.signature}`);
+        });
+      }
+      break;
+    }
+
+    case 'search-code': {
+      const db = new CodeDatabase(dbPath);
+      const query = args.slice(1).filter(a => !a.startsWith('-'))[1];
+      if (!query) {
+        console.error('Usage: hss-ce search-code <path> <query>');
+        process.exit(1);
+      }
+      const isRegex = args.includes('--regex');
+      const files = db.getAllFiles();
+      const results = [];
+      let searchRegex;
+      if (isRegex) {
+        searchRegex = new RegExp(query, 'i');
+      }
+      for (const file of files) {
+        const absPath = path.join(rootDir, file.path);
+        if (!fs.existsSync(absPath)) continue;
+        try {
+          const fileContent = fs.readFileSync(absPath, 'utf-8');
+          const lines = fileContent.split('\n');
+          lines.forEach((lineContent, idx) => {
+            const lineNum = idx + 1;
+            let isMatch = false;
+            if (isRegex) {
+              isMatch = searchRegex.test(lineContent);
+            } else {
+              isMatch = lineContent.toLowerCase().includes(query.toLowerCase());
+            }
+            if (isMatch) {
+              results.push({
+                filePath: file.path,
+                line: lineNum,
+                content: lineContent.trim()
+              });
+            }
+          });
+        } catch (err) {
+          // Ignore read errors
+        }
+      }
+      if (results.length === 0) {
+        console.log(`No code occurrences matching "${query}" found.`);
+      } else {
+        console.log(`=== CODE OCCURRENCES MATCHING "${query}" ===`);
+        results.slice(0, 100).forEach(res => {
+          console.log(`\n📄 File: ${res.filePath}:${res.line}`);
+          console.log(`   > ${res.content}`);
+        });
+        if (results.length > 100) {
+          console.log(`\n...and ${results.length - 100} more occurrences.`);
+        }
+      }
+      break;
+    }
+
     default:
       console.error(`Unknown command: ${command}`);
       printUsage();
@@ -1079,6 +1154,9 @@ Commands:
   map <path>               Print cached skeleton map (PageRank ordered).
                            Flags: --compact (elide to signatures under budget), --budget=1000
   query <path> <symbol>    Lookup definition and callers for a symbol.
+  search <path> <query>    Fuzzy search symbol names matching query pattern.
+  search-code <path> <q>   Search text snippet/regex across indexed files.
+                           Flags: --regex
   graph <path>             Print Mermaid file dependency graph.
   doc <path>               Generate README.md documentation with Mermaid graph.
   pack <path>              Pack files into structured XML under a token budget.

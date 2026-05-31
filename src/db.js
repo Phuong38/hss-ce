@@ -195,6 +195,16 @@ export class CodeDatabase {
     return stmt.all(symbolName);
   }
 
+  searchSymbols(query) {
+    // Fuzzy search for symbol names matching the query pattern
+    const stmt = this.db.prepare(`
+      SELECT file_path, name, type, signature, start_line, end_line 
+      FROM symbols 
+      WHERE name LIKE ?;
+    `);
+    return stmt.all(`%${query}%`);
+  }
+
   updatePageRanks(ranks) {
     const stmt = this.db.prepare(`UPDATE files SET pagerank = ? WHERE path = ?;`);
     for (const [filePath, rank] of Object.entries(ranks)) {
