@@ -46,6 +46,13 @@ export class CodeDatabase {
     } catch (_) {}
 
     this.db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS file_contents_fts USING fts5(
+        path UNINDEXED,
+        content
+      );
+    `);
+
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS symbols (
         id TEXT PRIMARY KEY,
         file_path TEXT NOT NULL,
@@ -83,6 +90,51 @@ export class CodeDatabase {
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_dependencies_from ON dependencies(from_file);`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_dependencies_symbol ON dependencies(symbol);`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_session_actions_timestamp ON session_actions(timestamp);`);
+  }
+
+  saveFileContentFts(filePath, content) {
+    this.db.prepare(`DELETE FROM file_contents_fts WHERE path = ?;`).run(filePath);
+    const stmt = this.db.prepare(`
+      INSERT INTO file_contents_fts (path, content)
+      VALUES (?, ?);
+    `);
+    stmt.run(filePath, content);
+  }
+
+  searchCodeFts(query) {
+    const terms = query
+      .split(/[\s,.:;'"(){}[\]+\-*\/\\&|^~%!?<>@#$]+/g)
+      .map(t => t.trim())
+      .filter(Boolean);
+    if (terms.length === 0) return [];
+    const ftsQuery = terms.map(t => `"${t}"`).join(' AND ');
+
+    try {
+      const stmt = this.db.prepare(`
+        SELECT fts.path, files.pagerank, bm25(file_contents_fts) as bm25_score
+        FROM file_contents_fts fts
+        JOIN files ON files.path = fts.path
+        WHERE file_contents_fts MATCH ?
+        ORDER BY bm25_score ASC, files.pagerank DESC
+        LIMIT 50;
+      `);
+      return stmt.all(ftsQuery);
+    } catch (err) {
+      try {
+        const stmtSimple = this.db.prepare(`
+          SELECT fts.path, files.pagerank, bm25(file_contents_fts) as bm25_score
+          FROM file_contents_fts fts
+          JOIN files ON files.path = fts.path
+          WHERE file_contents_fts MATCH ?
+          ORDER BY bm25_score ASC, files.pagerank DESC
+          LIMIT 50;
+        `);
+        return stmtSimple.all(terms.map(t => `"${t}"`).join(' OR '));
+      } catch (err2) {
+        console.error('FTS search error:', err2.message);
+        return [];
+      }
+    }
   }
 
   saveFile(filePath, hash, layer = 'service', summary = null, complexity = 1.0) {
@@ -137,6 +189,9 @@ export class CodeDatabase {
   }
 
   deleteFile(filePath) {
+    try {
+      this.db.prepare(`DELETE FROM file_contents_fts WHERE path = ?;`).run(filePath);
+    } catch (_) {}
     // Foreign key with ON DELETE CASCADE will handle symbols and dependencies
     const stmt = this.db.prepare(`DELETE FROM files WHERE path = ?;`);
     stmt.run(filePath);

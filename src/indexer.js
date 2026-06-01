@@ -282,6 +282,14 @@ export class CodeIndexer {
           const layer = determineLayer(relativePath, symbols);
           this.db.saveFile(relativePath, currentHash, layer, summary, complexity);
           
+          // Save file content to FTS
+          try {
+            const fileContent = fs.readFileSync(filePath, 'utf-8');
+            this.db.saveFileContentFts(relativePath, fileContent);
+          } catch (ftsErr) {
+            console.error(`Failed to index FTS content for ${relativePath}:`, ftsErr.message);
+          }
+
           // Save symbols
           for (const sym of symbols) {
             this.db.saveSymbol(

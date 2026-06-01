@@ -41,7 +41,7 @@ When you ask your agent (e.g. Claude Code or Cursor): *"Find all callers of the 
 1. Agent invokes `get_definition(symbol: "authenticate")` → HSS-CE queries SQLite and returns the exact file path and signature.
 2. Agent invokes `get_callers(symbol: "authenticate")` → HSS-CE returns a clean list of files and lines referencing the function.
 3. Agent invokes `search_symbols(query: "auth")` → HSS-CE fuzzy matches against indexed symbols and returns definition details.
-4. Agent invokes `search_code(query: "TODO: fix", isRegex: false)` → HSS-CE performs a fast, ignore-aware real-time search of matching code snippets on disk.
+4. Agent invokes `search_code(query: "TODO: fix", isRegex: false)` → HSS-CE performs a lightning-fast SQLite FTS5 index search, ranking results by BM25 relevance and PageRank structural importance.
 5. The agent reads only those specific files, completing the task with 90% fewer tokens and much higher accuracy.
 
 ---

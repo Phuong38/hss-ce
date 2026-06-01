@@ -25,6 +25,9 @@
     "url": "https://github.com/phuonglt/hss-ce/issues"
   },
   "homepage": "https://github.com/phuonglt/hss-ce#readme",
+  "scripts": {
+    "test": "node tests/fts.test.js"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.4.0"
   }

@@ -712,41 +712,56 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
             throw new Error('Query parameter is required');
           }
 
-          const files = db.getAllFiles();
           const results = [];
           
-          let searchRegex;
           if (isRegex) {
-            searchRegex = new RegExp(query, 'i');
-          }
+            const files = db.getAllFiles();
+            const searchRegex = new RegExp(query, 'i');
+            for (const file of files) {
+              const absPath = path.join(rootDir, file.path);
+              if (!fs.existsSync(absPath)) continue;
 
-          for (const file of files) {
-            const absPath = path.join(rootDir, file.path);
-            if (!fs.existsSync(absPath)) continue;
+              try {
+                const fileContent = fs.readFileSync(absPath, 'utf-8');
+                const lines = fileContent.split('\n');
+                
+                lines.forEach((lineContent, idx) => {
+                  const lineNum = idx + 1;
+                  if (searchRegex.test(lineContent)) {
+                    results.push({
+                      filePath: file.path,
+                      line: lineNum,
+                      content: lineContent.trim()
+                    });
+                  }
+                });
+              } catch (err) {
+                // Ignore reading errors for single files
+              }
+            }
+          } else {
+            const matchingFiles = db.searchCodeFts(query);
+            for (const matched of matchingFiles) {
+              const absPath = path.join(rootDir, matched.path);
+              if (!fs.existsSync(absPath)) continue;
 
-            try {
-              const fileContent = fs.readFileSync(absPath, 'utf-8');
-              const lines = fileContent.split('\n');
-              
-              lines.forEach((lineContent, idx) => {
-                const lineNum = idx + 1;
-                let isMatch = false;
-                if (isRegex) {
-                  isMatch = searchRegex.test(lineContent);
-                } else {
-                  isMatch = lineContent.toLowerCase().includes(query.toLowerCase());
-                }
-
-                if (isMatch) {
-                  results.push({
-                    filePath: file.path,
-                    line: lineNum,
-                    content: lineContent.trim()
-                  });
-                }
-              });
-            } catch (err) {
-              // Ignore reading errors for single files
+              try {
+                const fileContent = fs.readFileSync(absPath, 'utf-8');
+                const lines = fileContent.split('\n');
+                
+                lines.forEach((lineContent, idx) => {
+                  const lineNum = idx + 1;
+                  if (lineContent.toLowerCase().includes(query.toLowerCase())) {
+                    results.push({
+                      filePath: matched.path,
+                      line: lineNum,
+                      content: lineContent.trim()
+                    });
+                  }
+                });
+              } catch (err) {
+                // Ignore reading errors for single files
+              }
             }
           }
 
