@@ -288,8 +288,24 @@ function parsePython(content, symbols, imports) {
 export function determineLayer(filePath, symbols = []) {
   const normPath = filePath.toLowerCase().replace(/\\/g, '/');
   const baseName = path.basename(normPath);
+  const ext = path.extname(normPath);
 
-  // 1. Entrypoint classification
+  // 1. Configuration layer
+  if (
+    ['.json', '.yaml', '.yml', '.toml', '.ini'].includes(ext) ||
+    baseName === '.env.example' ||
+    baseName === 'package.json' ||
+    baseName === 'tsconfig.json'
+  ) {
+    return 'config';
+  }
+
+  // 2. Documentation layer
+  if (['.md', '.txt'].includes(ext)) {
+    return 'documentation';
+  }
+
+  // 3. Entrypoint classification
   if (
     baseName === 'cli.js' || 
     baseName === 'cli.ts' || 
@@ -306,7 +322,7 @@ export function determineLayer(filePath, symbols = []) {
     return 'entrypoint';
   }
 
-  // 2. Storage classification
+  // 4. Storage classification
   if (
     normPath.includes('/db/') ||
     normPath.includes('/database/') ||
@@ -325,9 +341,10 @@ export function determineLayer(filePath, symbols = []) {
     return 'storage';
   }
 
-  // 3. Logic/Service classification
+  // 5. Logic/Service classification
   return 'service';
 }
+
 
 export function stripComments(content, ext) {
   if (['.js', '.ts', '.jsx', '.tsx'].includes(ext)) {

@@ -132,7 +132,7 @@ export class CodeIndexer {
           this.getFiles(filePath, fileList);
         } else {
           const ext = path.extname(filePath);
-          if (['.js', '.ts', '.jsx', '.tsx', '.py'].includes(ext)) {
+          if (['.js', '.ts', '.jsx', '.tsx', '.py', '.json', '.md', '.yaml', '.yml', '.toml', '.css', '.html', '.sh', '.sql'].includes(ext)) {
             fileList.push(filePath);
           }
         }

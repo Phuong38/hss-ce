@@ -230,6 +230,9 @@ const tokenBudget = budgetFlag ? parseInt(budgetFlag.split('=')[1], 10) : 1000;
 const outputFlag = args.find(a => a.startsWith('--output='));
 const outputFile = outputFlag ? outputFlag.split('=')[1] : null;
 
+const formatFlag = args.find(a => a.startsWith('--format='));
+const packFormat = formatFlag ? formatFlag.split('=')[1] : 'xml';
+
 // The target path is the first argument that is not a flag and is not the command
 const targetPath = args.slice(1).find(a => !a.startsWith('-')) || '.';
 const rootDir = path.resolve(targetPath);
@@ -966,6 +969,8 @@ node src/cli.js mcp .
       const entrypoints = map.filter(f => f.layer === 'entrypoint');
       const services = map.filter(f => f.layer === 'service');
       const storage = map.filter(f => f.layer === 'storage');
+      const configs = map.filter(f => f.layer === 'config');
+      const docs = map.filter(f => f.layer === 'documentation');
 
       console.log('## 1. Entrypoints & Endpoints (How the app starts / receives input)');
       if (entrypoints.length === 0) console.log('* No entrypoint layer files detected.');
@@ -1011,6 +1016,24 @@ node src/cli.js mcp .
           }
         });
       }
+
+      console.log('## 4. Configurations (Settings & Environments)');
+      if (configs.length === 0) console.log('* No configuration files detected.');
+      else {
+        configs.forEach(f => {
+          console.log(`### 📄 [${f.path}](file:///${path.join(rootDir, f.path)}) (PageRank: ${f.pagerank.toFixed(3)})`);
+          if (f.summary) console.log(`> ${f.summary}\n`);
+        });
+      }
+
+      console.log('## 5. Documentation & Metadata');
+      if (docs.length === 0) console.log('* No documentation files detected.');
+      else {
+        docs.forEach(f => {
+          console.log(`### 📄 [${f.path}](file:///${path.join(rootDir, f.path)}) (PageRank: ${f.pagerank.toFixed(3)})`);
+          if (f.summary) console.log(`> ${f.summary}\n`);
+        });
+      }
       break;
     }
 
@@ -1018,7 +1041,9 @@ node src/cli.js mcp .
       const db = new CodeDatabase(dbPath);
       const map = db.getSkeletonMap();
       
-      let packedOutput = `<!-- HSS-CE Codebase Context Pack (Budget: ${tokenBudget} tokens) -->\n`;
+      let packedOutput = packFormat === 'markdown'
+        ? `<!-- HSS-CE Codebase Context Pack (Budget: ${tokenBudget} tokens) -->\n\n`
+        : `<!-- HSS-CE Codebase Context Pack (Budget: ${tokenBudget} tokens) -->\n`;
       let currentTokens = estimateTokens(packedOutput);
 
       for (const file of map) {
@@ -1037,7 +1062,17 @@ node src/cli.js mcp .
           content = stripComments(content, path.extname(file.path));
         }
 
-        const fileBlock = `<file path="${file.path}">\n${content}\n</file>\n`;
+        let fileBlock = '';
+        if (packFormat === 'markdown') {
+          let extName = path.extname(file.path).slice(1);
+          if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
+          if (extName === 'ts' || extName === 'js') extName = 'javascript';
+          if (extName === 'py') extName = 'python';
+          fileBlock = `## File: ${file.path}\n\`\`\`${extName}\n${content}\n\`\`\`\n\n`;
+        } else {
+          fileBlock = `<file path="${file.path}">\n${content}\n</file>\n`;
+        }
+
         const fileTokens = estimateTokens(fileBlock);
 
         if (currentTokens + fileTokens > tokenBudget) {

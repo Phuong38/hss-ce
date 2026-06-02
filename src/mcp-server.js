@@ -104,7 +104,7 @@ export async function runMcpServer(dbPath, rootDir) {
         },
         {
           name: 'pack_context',
-          description: 'Pack codebase files under a token budget into structured XML with secret redactions.',
+          description: 'Pack codebase files under a token budget into structured XML or Markdown with secret redactions.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -122,6 +122,12 @@ export async function runMcpServer(dbPath, rootDir) {
                 type: 'boolean',
                 description: 'Strip comments from packaged files to conserve token budget (default false)',
                 default: false
+              },
+              format: {
+                type: 'string',
+                description: 'Output format: "xml" or "markdown" (default "xml")',
+                enum: ['xml', 'markdown'],
+                default: 'xml'
               }
             }
           }
@@ -378,6 +384,7 @@ export async function runMcpServer(dbPath, rootDir) {
         case 'pack_context': {
           const activeFiles = args?.activeFiles || null;
           const noComments = args?.noComments || false;
+          const format = args?.format || 'xml';
           if (activeFiles && activeFiles.length > 0) {
             const indexer = new CodeIndexer(db, rootDir);
             indexer.index(false, activeFiles);
@@ -411,7 +418,9 @@ export async function runMcpServer(dbPath, rootDir) {
             return redacted;
           };
 
-          let packedOutput = `<!-- HSS-CE Codebase Context Pack (Budget: ${budget} tokens) -->\n`;
+          let packedOutput = format === 'markdown'
+            ? `<!-- HSS-CE Codebase Context Pack (Budget: ${budget} tokens) -->\n\n`
+            : `<!-- HSS-CE Codebase Context Pack (Budget: ${budget} tokens) -->\n`;
           let currentTokens = estimateTokens(packedOutput);
 
           for (const file of map) {
@@ -430,7 +439,17 @@ export async function runMcpServer(dbPath, rootDir) {
               content = stripComments(content, path.extname(file.path));
             }
 
-            const fileBlock = `<file path="${file.path}">\n${content}\n</file>\n`;
+            let fileBlock = '';
+            if (format === 'markdown') {
+              let extName = path.extname(file.path).slice(1);
+              if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
+              if (extName === 'ts' || extName === 'js') extName = 'javascript';
+              if (extName === 'py') extName = 'python';
+              fileBlock = `## File: ${file.path}\n\`\`\`${extName}\n${content}\n\`\`\`\n\n`;
+            } else {
+              fileBlock = `<file path="${file.path}">\n${content}\n</file>\n`;
+            }
+
             const fileTokens = estimateTokens(fileBlock);
 
             if (currentTokens + fileTokens > budget) {
@@ -461,6 +480,8 @@ export async function runMcpServer(dbPath, rootDir) {
           const entrypoints = map.filter(f => f.layer === 'entrypoint');
           const services = map.filter(f => f.layer === 'service');
           const storage = map.filter(f => f.layer === 'storage');
+          const configs = map.filter(f => f.layer === 'config');
+          const docs = map.filter(f => f.layer === 'documentation');
 
           tour += '## 1. Entrypoints & Endpoints (How the app starts / receives input)\n';
           if (entrypoints.length === 0) tour += '* No entrypoint layer files detected.\n';
@@ -510,6 +531,24 @@ export async function runMcpServer(dbPath, rootDir) {
                 });
                 tour += '\n';
               }
+            });
+          }
+
+          tour += '## 4. Configurations (Settings & Environments)\n';
+          if (configs.length === 0) tour += '* No configuration files detected.\n';
+          else {
+            configs.forEach(f => {
+              tour += `### 📄 [${f.path}] (PageRank: ${f.pagerank.toFixed(3)})\n`;
+              if (f.summary) tour += `> ${f.summary}\n\n`;
+            });
+          }
+
+          tour += '## 5. Documentation & Metadata\n';
+          if (docs.length === 0) tour += '* No documentation files detected.\n';
+          else {
+            docs.forEach(f => {
+              tour += `### 📄 [${f.path}] (PageRank: ${f.pagerank.toFixed(3)})\n`;
+              if (f.summary) tour += `> ${f.summary}\n\n`;
             });
           }
 
