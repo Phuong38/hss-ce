@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { CodeDatabase } from './db.js';
 import { CodeIndexer } from './indexer.js';
-import { stripComments } from './parser.js';
+import { stripComments, generateSkeletonContent } from './parser.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
@@ -128,6 +128,22 @@ export async function runMcpServer(dbPath, rootDir) {
                 description: 'Output format: "xml" or "markdown" (default "xml")',
                 enum: ['xml', 'markdown'],
                 default: 'xml'
+              },
+              compact: {
+                type: 'boolean',
+                description: 'Pack skeletons instead of full content for files (default false)',
+                default: false
+              },
+              progressive: {
+                type: 'boolean',
+                description: 'Progressively compress files to skeleton when budget runs low instead of truncating (default false)',
+                default: false
+              },
+              sort: {
+                type: 'string',
+                description: 'Ordering of files: "pagerank" or "path" (default "pagerank")',
+                enum: ['pagerank', 'path'],
+                default: 'pagerank'
               }
             }
           }
@@ -385,13 +401,20 @@ export async function runMcpServer(dbPath, rootDir) {
           const activeFiles = args?.activeFiles || null;
           const noComments = args?.noComments || false;
           const format = args?.format || 'xml';
+          const compact = args?.compact || false;
+          const progressive = args?.progressive || false;
+          const sort = args?.sort || 'pagerank';
           if (activeFiles && activeFiles.length > 0) {
             const indexer = new CodeIndexer(db, rootDir);
             indexer.index(false, activeFiles);
           }
           
           const budget = args?.budget || 2000;
-          const map = db.getSkeletonMap();
+          let map = db.getSkeletonMap();
+
+          if (sort === 'path') {
+            map.sort((a, b) => a.path.localeCompare(b.path));
+          }
           
           const estimateTokens = (str) => Math.ceil(str.length / 4);
           const redactSecrets = (content) => {
@@ -435,26 +458,48 @@ export async function runMcpServer(dbPath, rootDir) {
             }
 
             content = redactSecrets(content);
-            if (noComments) {
-              content = stripComments(content, path.extname(file.path));
+
+            let useSkeleton = compact;
+            if (progressive && !useSkeleton) {
+              const isActive = activeFiles && activeFiles.includes(file.path);
+              if (currentTokens > 0.6 * budget && !isActive) {
+                useSkeleton = true;
+              }
             }
 
-            let fileBlock = '';
-            if (format === 'markdown') {
-              let extName = path.extname(file.path).slice(1);
-              if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
-              if (extName === 'ts' || extName === 'js') extName = 'javascript';
-              if (extName === 'py') extName = 'python';
-              fileBlock = `## File: ${file.path}\n\`\`\`${extName}\n${content}\n\`\`\`\n\n`;
-            } else {
-              fileBlock = `<file path="${file.path}">\n${content}\n</file>\n`;
-            }
+            const generateBlock = (fileContent, skeletonMode) => {
+              let procContent = fileContent;
+              if (skeletonMode) {
+                procContent = generateSkeletonContent(procContent, path.extname(file.path), file.symbols, file.summary);
+              } else if (noComments) {
+                procContent = stripComments(procContent, path.extname(file.path));
+              }
 
-            const fileTokens = estimateTokens(fileBlock);
+              if (format === 'markdown') {
+                let extName = path.extname(file.path).slice(1);
+                if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
+                if (extName === 'ts' || extName === 'js') extName = 'javascript';
+                if (extName === 'py') extName = 'python';
+                return `## File: ${file.path}\n\`\`\`${extName}\n${procContent}\n\`\`\`\n\n`;
+              } else {
+                return `<file path="${file.path}">\n${procContent}\n</file>\n`;
+              }
+            };
+
+            let fileBlock = generateBlock(content, useSkeleton);
+            let fileTokens = estimateTokens(fileBlock);
 
             if (currentTokens + fileTokens > budget) {
-              packedOutput += `\n<!-- Truncated: reached token budget of ${budget} tokens -->\n`;
-              break;
+              if (progressive && !useSkeleton) {
+                useSkeleton = true;
+                fileBlock = generateBlock(content, true);
+                fileTokens = estimateTokens(fileBlock);
+              }
+
+              if (currentTokens + fileTokens > budget) {
+                packedOutput += `\n<!-- Truncated: reached token budget of ${budget} tokens -->\n`;
+                break;
+              }
             }
 
             packedOutput += fileBlock;

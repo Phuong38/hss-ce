@@ -368,3 +368,97 @@ export function stripComments(content, ext) {
   return content;
 }
 
+export function generateSkeletonContent(content, ext, symbols = [], summary = null) {
+  const isJs = ['.js', '.ts', '.jsx', '.tsx'].includes(ext);
+  const isPy = ext === '.py';
+
+  if (!isJs && !isPy) {
+    return content;
+  }
+
+  const lines = [];
+
+  // 1. Summary / Docstring
+  if (summary) {
+    if (isJs) {
+      lines.push(`/**\n * ${summary}\n */\n`);
+    } else if (isPy) {
+      lines.push(`"""\n${summary}\n"""\n`);
+    }
+  }
+
+  // 2. Extract imports from the original content
+  const importLines = [];
+  if (isJs) {
+    // Match import statements (single or multi-line)
+    const jsImportRegex = /import\s+[\s\S]*?\s+from\s+['"][^'"]+['"];?/g;
+    let match;
+    while ((match = jsImportRegex.exec(content)) !== null) {
+      importLines.push(match[0]);
+    }
+    // Also capture side-effect imports, e.g. import 'foo';
+    const jsSideEffectImportRegex = /^import\s+['"][^'"]+['"];?/gm;
+    while ((match = jsSideEffectImportRegex.exec(content)) !== null) {
+      if (!importLines.includes(match[0])) {
+        importLines.push(match[0]);
+      }
+    }
+  } else if (isPy) {
+    const pyImportRegex = /^(?:import\s+.+|from\s+.+\s+import\s+.+)/gm;
+    let match;
+    while ((match = pyImportRegex.exec(content)) !== null) {
+      importLines.push(match[0]);
+    }
+  }
+
+  if (importLines.length > 0) {
+    lines.push(importLines.join('\n'));
+    lines.push(''); // blank line after imports
+  }
+
+  // 3. Format symbol signatures
+  const sortedSymbols = [...symbols].sort((a, b) => a.startLine - b.startLine);
+  
+  sortedSymbols.forEach(sym => {
+    if (sym.type === 'class') {
+      if (isJs) {
+        lines.push(`${sym.signature || `class ${sym.name}`} { /* class body elided */ }`);
+      } else if (isPy) {
+        let sig = sym.signature || `class ${sym.name}`;
+        if (!sig.endsWith(':')) sig += ':';
+        lines.push(`${sig} ...`);
+      }
+    } else if (sym.type === 'function') {
+      if (isJs) {
+        let sig = sym.signature || `function ${sym.name}()`;
+        if (sig.includes('=> ...')) {
+          // Replace '=> ...' with arrow function skeleton
+          sig = sig.replace('=> ...', '=> { /* body elided */ }');
+        } else if (sig.includes('=>')) {
+          // If it's an arrow function without the suffix
+          sig = `${sig} { /* body elided */ }`;
+        } else {
+          sig = `${sig} { /* body elided */ }`;
+        }
+        lines.push(sig);
+      } else if (isPy) {
+        let sig = sym.signature || `def ${sym.name}()`;
+        if (!sig.endsWith(':')) sig += ':';
+        lines.push(`${sig} ...`);
+      }
+    } else if (sym.type === 'interface') {
+      lines.push(`${sym.signature || `interface ${sym.name}`} { /* interface body elided */ }`);
+    } else if (sym.type === 'type') {
+      lines.push(`${sym.signature || `type ${sym.name}`} = any; /* type body elided */`);
+    } else if (sym.type === 'route') {
+      if (isJs) {
+        lines.push(`// Route: ${sym.signature || sym.name}`);
+      } else if (isPy) {
+        lines.push(`# Route: ${sym.signature || sym.name}`);
+      }
+    }
+  });
+
+  return lines.join('\n');
+}
+

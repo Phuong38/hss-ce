@@ -49,11 +49,25 @@ function generateAgentRules(targetProject, cliPath) {
 
 This project has an active HSS-CE indexer database at \`.hss-ce/graph.db\`.
 
-Rules:
-- Before resolving complex changes or doing codebase mapping, check the map: \`npx hss-ce map .\` to view PageRank importance, layers, and summaries.
-- Run onboarding tour: \`npx hss-ce tour .\` or use the MCP tool \`get_onboarding_tour\` to understand codebase layers (Entrypoints, Services, Storage) step-by-step.
-- When searching for symbol definitions or callers, prefer running CLI query: \`npx hss-ce query . <symbol>\` or using the MCP tool \`get_definition\` / \`get_callers\` rather than using raw \`grep\`.
-- When modifying code files, keep the graph updated by running \`npx hss-ce index .\` and generate docs with \`npx hss-ce doc .\`.
+### Core Developer Rules
+
+#### 1. Think Before Coding
+- Stop and state assumptions before writing code.
+- Avoid overcomplicating. Present simple options first.
+
+#### 2. Simplicity First
+- Minimum code that solves the problem. No speculative features.
+- If you write 200 lines and it could be 50, rewrite it.
+- Remove any imports/variables/functions that your changes made unused.
+
+#### 3. Surgical Changes
+- Touch only what you must to fulfill the request.
+- Match existing style. Don't refactor or "improve" adjacent code that isn't broken.
+
+### Tool-First Guidelines
+- Before exploring the codebase, use HSS-CE MCP tools (\`get_compact_map\`, \`get_onboarding_tour\`) to gather structural context.
+- When searching for symbol definitions or callers, prefer running CLI query: \`npx hss-ce query . <symbol>\` or using MCP tools \`get_definition\` / \`get_callers\` rather than using raw \`grep\` or reading entire files.
+- Keep the index updated by running \`npx hss-ce index .\` and generate docs with \`npx hss-ce doc .\` after making changes.
 `;
   fs.writeFileSync(rulesPath, rulesContent, 'utf-8');
   console.log(`Created: ${rulesPath}`);
@@ -103,6 +117,13 @@ Follow these instructions to run HSS-CE tasks:
   const cursorRulesPath = path.join(targetProject, '.cursorrules');
   const cursorRulesContent = `
 # HSS-CE Rules for Cursor
+
+## Core Developer Rules
+- **Think Before Coding**: State assumptions, push back on overcomplication.
+- **Simplicity First**: Write minimal code. Clean up imports/variables/functions that your changes make unused.
+- **Surgical Changes**: Touch only what you must. Match existing style.
+
+## Tool-First Guidelines
 - Use HSS-CE MCP tools (\`get_skeleton\`, \`get_definition\`, \`get_callers\`, \`get_routes\`, \`get_compact_map\`, \`pack_context\`, \`get_onboarding_tour\`) to explore the codebase and gather structural context.
 - To view codebase onboarding tour, run: \`npx hss-ce tour .\`
 - To view codebase importance and layers, run: \`npx hss-ce map . --compact --budget=1000\`
@@ -115,6 +136,13 @@ Follow these instructions to run HSS-CE tasks:
   const claudePath = path.join(targetProject, 'CLAUDE.md');
   const claudeContent = `
 # HSS-CE instructions for Claude Code
+
+## Core Developer Rules
+- **Think Before Coding**: State assumptions, push back on overcomplication.
+- **Simplicity First**: Write minimal code. Clean up imports/variables/functions that your changes make unused.
+- **Surgical Changes**: Touch only what you must. Match existing style.
+
+## Tool-First Guidelines
 - Use the HSS-CE MCP server tools (including \`get_onboarding_tour\`) to search and gather structural context for functions/classes.
 - To understand the project structure, run the onboarding tour: \`npx hss-ce tour .\`
 - Keep the index updated: \`npx hss-ce index .\` after edits.
@@ -126,6 +154,13 @@ Follow these instructions to run HSS-CE tasks:
   const aiderInstructionsPath = path.join(targetProject, '.aider.instructions.md');
   const aiderInstructionsContent = `
 # HSS-CE rules for Aider
+
+## Core Developer Rules
+- **Think Before Coding**: State assumptions, push back on overcomplication.
+- **Simplicity First**: Write minimal code. Clean up imports/variables/functions that your changes make unused.
+- **Surgical Changes**: Touch only what you must. Match existing style.
+
+## Tool-First Guidelines
 - Aider can use HSS-CE via MCP configuration.
 - To view codebase graph or symbol definitions, run \`npx hss-ce query . <symbol>\` or \`npx hss-ce map .\`.
 - Update the index after editing files: \`npx hss-ce index .\`.

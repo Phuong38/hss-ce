@@ -3,7 +3,7 @@
 import { CodeDatabase } from './db.js';
 import { CodeIndexer } from './indexer.js';
 import { runMcpServer } from './mcp-server.js';
-import { stripComments } from './parser.js';
+import { stripComments, generateSkeletonContent } from './parser.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
@@ -223,6 +223,10 @@ const activeFiles = activeFlag ? activeFlag.split('=')[1].split(',') : null;
 
 const compact = args.includes('--compact');
 const noComments = args.includes('--no-comments');
+const progressive = args.includes('--progressive');
+
+const sortFlag = args.find(a => a.startsWith('--sort='));
+const sortOption = sortFlag ? sortFlag.split('=')[1] : 'pagerank';
 
 const budgetFlag = args.find(a => a.startsWith('--budget='));
 const tokenBudget = budgetFlag ? parseInt(budgetFlag.split('=')[1], 10) : 1000;
@@ -1039,7 +1043,11 @@ node src/cli.js mcp .
 
     case 'pack': {
       const db = new CodeDatabase(dbPath);
-      const map = db.getSkeletonMap();
+      let map = db.getSkeletonMap();
+
+      if (sortOption === 'path') {
+        map.sort((a, b) => a.path.localeCompare(b.path));
+      }
       
       let packedOutput = packFormat === 'markdown'
         ? `<!-- HSS-CE Codebase Context Pack (Budget: ${tokenBudget} tokens) -->\n\n`
@@ -1058,26 +1066,48 @@ node src/cli.js mcp .
         }
 
         content = redactSecrets(content);
-        if (noComments) {
-          content = stripComments(content, path.extname(file.path));
+
+        let useSkeleton = compact;
+        if (progressive && !useSkeleton) {
+          const isActive = activeFiles && activeFiles.includes(file.path);
+          if (currentTokens > 0.6 * tokenBudget && !isActive) {
+            useSkeleton = true;
+          }
         }
 
-        let fileBlock = '';
-        if (packFormat === 'markdown') {
-          let extName = path.extname(file.path).slice(1);
-          if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
-          if (extName === 'ts' || extName === 'js') extName = 'javascript';
-          if (extName === 'py') extName = 'python';
-          fileBlock = `## File: ${file.path}\n\`\`\`${extName}\n${content}\n\`\`\`\n\n`;
-        } else {
-          fileBlock = `<file path="${file.path}">\n${content}\n</file>\n`;
-        }
+        const generateBlock = (fileContent, skeletonMode) => {
+          let procContent = fileContent;
+          if (skeletonMode) {
+            procContent = generateSkeletonContent(procContent, path.extname(file.path), file.symbols, file.summary);
+          } else if (noComments) {
+            procContent = stripComments(procContent, path.extname(file.path));
+          }
 
-        const fileTokens = estimateTokens(fileBlock);
+          if (packFormat === 'markdown') {
+            let extName = path.extname(file.path).slice(1);
+            if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
+            if (extName === 'ts' || extName === 'js') extName = 'javascript';
+            if (extName === 'py') extName = 'python';
+            return `## File: ${file.path}\n\`\`\`${extName}\n${procContent}\n\`\`\`\n\n`;
+          } else {
+            return `<file path="${file.path}">\n${procContent}\n</file>\n`;
+          }
+        };
+
+        let fileBlock = generateBlock(content, useSkeleton);
+        let fileTokens = estimateTokens(fileBlock);
 
         if (currentTokens + fileTokens > tokenBudget) {
-          packedOutput += `\n<!-- Truncated: reached token budget of ${tokenBudget} tokens -->\n`;
-          break;
+          if (progressive && !useSkeleton) {
+            useSkeleton = true;
+            fileBlock = generateBlock(content, true);
+            fileTokens = estimateTokens(fileBlock);
+          }
+
+          if (currentTokens + fileTokens > tokenBudget) {
+            packedOutput += `\n<!-- Truncated: reached token budget of ${tokenBudget} tokens -->\n`;
+            break;
+          }
         }
 
         packedOutput += fileBlock;
@@ -1212,7 +1242,7 @@ Commands:
   graph <path>             Print Mermaid file dependency graph.
   doc <path>               Generate README.md documentation with Mermaid graph.
   pack <path>              Pack files into structured XML under a token budget.
-                           Flags: --budget=1000, --output=file.txt, --no-comments
+                           Flags: --budget=1000, --output=file.txt, --no-comments, --compact, --progressive, --sort=pagerank|path
   enrich <path>            Enrich codebase index with AI-generated summaries.
                            Flags: --key=api_key (or set GEMINI_API_KEY), --force
   tour <path>              Generate step-by-step codebase onboarding tour.

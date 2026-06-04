@@ -110,7 +110,7 @@ If you prefer using the terminal manually, HSS-CE provides the following command
 | `hss-ce query <path> <sym>` | `hss-ce query . validateUser` | Instantly lookup definition and callers for a specific symbol. |
 | `hss-ce search <path> <query>` | `hss-ce search . auth` | Fuzzy search symbol names matching query pattern. |
 | `hss-ce search-code <path> <q>` | `hss-ce search-code . TODO --regex` | Search text snippet/regex across indexed files. Add `--regex` for regex pattern. |
-| `hss-ce pack <path>` | `hss-ce pack . --budget=2000 --format=markdown` | Package source/config/docs files into structured XML/Markdown for LLM context, with secret redacting. |
+| `hss-ce pack <path>` | `hss-ce pack . --budget=2000 --format=markdown --progressive --sort=path` | Package source/config/docs files into structured XML/Markdown for LLM context, with secret redacting. Supports progressive fallback compression to skeletons and deterministic sorting. |
 | `hss-ce enrich <path>` | `hss-ce enrich .` | (Optional) Fetch AI-generated summaries via Gemini API (requires `GEMINI_API_KEY`). |
 
 ---
