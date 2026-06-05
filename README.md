@@ -40,9 +40,10 @@ Imagine you need to modify a database schema file `src/db.js` in a large codebas
 When you ask your agent (e.g. Claude Code or Cursor): *"Find all callers of the authenticate function and tell me where it is defined"*, the agent bypasses slow search loops and makes a fast MCP tool call:
 1. Agent invokes `get_definition(symbol: "authenticate")` → HSS-CE queries SQLite and returns the exact file path and signature.
 2. Agent invokes `get_callers(symbol: "authenticate")` → HSS-CE returns a clean list of files and lines referencing the function.
-3. Agent invokes `search_symbols(query: "auth")` → HSS-CE fuzzy matches against indexed symbols and returns definition details.
-4. Agent invokes `search_code(query: "TODO: fix", isRegex: false)` → HSS-CE performs a lightning-fast SQLite FTS5 index search, ranking results by BM25 relevance and PageRank structural importance.
-5. The agent reads only those specific files, completing the task with 90% fewer tokens and much higher accuracy.
+3. Agent invokes `get_dependency_path(fromFile: "src/main.js", toFile: "src/db.js")` → HSS-CE traces and lists the step-by-step import path between files.
+4. Agent invokes `search_symbols(query: "auth")` → HSS-CE fuzzy matches against indexed symbols and returns definition details.
+5. Agent invokes `search_code(query: "TODO: fix", isRegex: false)` → HSS-CE performs a lightning-fast SQLite FTS5 index search, ranking results by BM25 relevance and PageRank structural importance.
+6. The agent reads only those specific files, completing the task with 90% fewer tokens and much higher accuracy.
 
 ---
 
@@ -108,6 +109,7 @@ If you prefer using the terminal manually, HSS-CE provides the following command
 | `hss-ce doc <path>` | `hss-ce doc .` | Regenerate `CODEBASE.md` and `architecture.html` dashboard. |
 | `hss-ce tour <path>` | `hss-ce tour .` | Display a step-by-step onboarding walkthrough tour of the codebase. |
 | `hss-ce query <path> <sym>` | `hss-ce query . validateUser` | Instantly lookup definition and callers for a specific symbol. |
+| `hss-ce path <path> <from> <to>` | `hss-ce path . src/cli.js src/db.js` | Find directed dependency/import path chain from one file to another. |
 | `hss-ce search <path> <query>` | `hss-ce search . auth` | Fuzzy search symbol names matching query pattern. |
 | `hss-ce search-code <path> <q>` | `hss-ce search-code . TODO --regex` | Search text snippet/regex across indexed files. Add `--regex` for regex pattern. |
 | `hss-ce pack <path>` | `hss-ce pack . --budget=2000 --format=markdown --progressive --sort=path` | Package source/config/docs files into structured XML/Markdown for LLM context, with secret redacting. Supports progressive fallback compression to skeletons and deterministic sorting. |

@@ -226,6 +226,24 @@ export async function runMcpServer(dbPath, rootDir) {
             },
             required: ['query']
           }
+        },
+        {
+          name: 'get_dependency_path',
+          description: 'Find import/dependency path chain from one file to another in the codebase context.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              fromFile: {
+                type: 'string',
+                description: 'The starting file path (can be absolute or relative)'
+              },
+              toFile: {
+                type: 'string',
+                description: 'The destination file path (can be absolute or relative)'
+              }
+            },
+            required: ['fromFile', 'toFile']
+          }
         }
       ]
     };
@@ -856,6 +874,48 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
                 text: results.length > 0
                   ? JSON.stringify(results.slice(0, 100), null, 2)
                   : `No code occurrences matching "${query}" found.`
+              }
+            ]
+          };
+        }
+
+        case 'get_dependency_path': {
+          const fromFile = args?.fromFile;
+          const toFile = args?.toFile;
+          if (!fromFile || !toFile) {
+            throw new Error('Both fromFile and toFile parameters are required');
+          }
+
+          const getRelativePath = (p) => {
+            if (path.isAbsolute(p)) {
+              return path.relative(rootDir, p);
+            }
+            if (p.startsWith('.')) {
+              return path.relative(rootDir, path.resolve(rootDir, p));
+            }
+            return p;
+          };
+
+          const relFrom = getRelativePath(fromFile);
+          const relTo = getRelativePath(toFile);
+
+          const pathResult = db.getDependencyPath(relFrom, relTo);
+
+          let outputText = '';
+          if (pathResult) {
+            outputText = `Dependency path found from "${relFrom}" to "${relTo}":\n\n`;
+            pathResult.forEach((step, index) => {
+              outputText += `${index + 1}. [${step.from}] imports "${step.symbol}" from [${step.to}]\n`;
+            });
+          } else {
+            outputText = `No dependency path found from "${relFrom}" to "${relTo}".`;
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: outputText
               }
             ]
           };

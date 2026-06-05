@@ -260,6 +260,35 @@ export class CodeDatabase {
     return stmt.all(`%${query}%`);
   }
 
+  getDependencyPath(fromFile, toFile) {
+    const deps = this.db.prepare('SELECT from_file, to_file, symbol FROM dependencies;').all();
+    const adj = {};
+    for (const row of deps) {
+      if (!adj[row.from_file]) adj[row.from_file] = [];
+      adj[row.from_file].push({ to: row.to_file, symbol: row.symbol });
+    }
+
+    const queue = [[fromFile, []]];
+    const visited = new Set([fromFile]);
+
+    while (queue.length > 0) {
+      const [curr, path] = queue.shift();
+      if (curr === toFile) {
+        return path;
+      }
+
+      const neighbors = adj[curr] || [];
+      for (const edge of neighbors) {
+        if (!visited.has(edge.to)) {
+          visited.add(edge.to);
+          const newPath = [...path, { from: curr, to: edge.to, symbol: edge.symbol }];
+          queue.push([edge.to, newPath]);
+        }
+      }
+    }
+    return null;
+  }
+
   updatePageRanks(ranks) {
     const stmt = this.db.prepare(`UPDATE files SET pagerank = ? WHERE path = ?;`);
     for (const [filePath, rank] of Object.entries(ranks)) {

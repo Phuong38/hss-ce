@@ -288,6 +288,41 @@ try {
       break;
     }
 
+    case 'path': {
+      const commandArgs = args.slice(1).filter(a => !a.startsWith('-') && a !== targetPath);
+      if (commandArgs.length < 2) {
+        console.error('Specify from and to files: path <path> <fromFile> <toFile>');
+        process.exit(1);
+      }
+      const [fromFile, toFile] = commandArgs;
+      
+      const getRelativePath = (p) => {
+        if (path.isAbsolute(p)) {
+          return path.relative(rootDir, p);
+        }
+        if (p.startsWith('.')) {
+          return path.relative(rootDir, path.resolve(rootDir, p));
+        }
+        return p;
+      };
+
+      const relFrom = getRelativePath(fromFile);
+      const relTo = getRelativePath(toFile);
+
+      const db = new CodeDatabase(dbPath);
+      const pathResult = db.getDependencyPath(relFrom, relTo);
+
+      if (pathResult) {
+        console.log(`\nDependency path found from "${relFrom}" to "${relTo}":`);
+        pathResult.forEach((step, index) => {
+          console.log(`${index + 1}. [${step.from}] imports "${step.symbol}" from [${step.to}]`);
+        });
+      } else {
+        console.log(`\nNo dependency path found from "${relFrom}" to "${relTo}".`);
+      }
+      break;
+    }
+
     case 'mcp': {
       // Ensure directory initialized
       if (!fs.existsSync(dbPath)) {
@@ -1236,6 +1271,7 @@ Commands:
   map <path>               Print cached skeleton map (PageRank ordered).
                            Flags: --compact (elide to signatures under budget), --budget=1000
   query <path> <symbol>    Lookup definition and callers for a symbol.
+  path <path> <from> <to>  Find import path chain from one file to another.
   search <path> <query>    Fuzzy search symbol names matching query pattern.
   search-code <path> <q>   Search text snippet/regex across indexed files.
                            Flags: --regex
