@@ -7,6 +7,47 @@ import { stripComments, generateSkeletonContent } from './parser.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
+const redactSecrets = (content) => {
+  let redacted = content;
+  redacted = redacted.replace(/\b(AKIA[0-9A-Z]{16})\b/g, '[REDACTED_AWS_KEY_ID]');
+  redacted = redacted.replace(/\bsk-(?:proj-|or-v1-)?[a-zA-Z0-9]{32,}\b/g, '[REDACTED_OPENAI_KEY]');
+  redacted = redacted.replace(/\bxox[bpa]-[a-zA-Z0-9-]{10,}\b/g, '[REDACTED_SLACK_TOKEN]');
+  const secretAssignRegex = /(secret|password|passwd|key|token|auth|credential|private_key|passphrase)\s*(?:=|:)\s*['"]([^'"]{8,})['"]/gi;
+  redacted = redacted.replace(secretAssignRegex, (match, param, val) => {
+    if (
+      val.includes('/') || 
+      val.includes('\\') || 
+      val.startsWith('http') || 
+      val === 'true' || 
+      val === 'false' || 
+      val.length < 12
+    ) {
+      return match;
+    }
+    const separator = match.includes(':') ? ':' : '=';
+    const quote = match.includes("'") ? "'" : '"';
+    return `${param}${separator}${quote}[REDACTED]${quote}`;
+  });
+  return redacted;
+};
+
+function compactJsonContent(content, filePath) {
+  try {
+    const obj = JSON.parse(content);
+    if (path.basename(filePath) === 'package.json') {
+      const compacted = {};
+      const keysToKeep = ['name', 'version', 'type', 'scripts', 'dependencies', 'devDependencies', 'peerDependencies', 'bin'];
+      for (const k of keysToKeep) {
+        if (obj[k] !== undefined) compacted[k] = obj[k];
+      }
+      return JSON.stringify(compacted);
+    }
+    return JSON.stringify(obj);
+  } catch (err) {
+    return content;
+  }
+}
+
 export async function runMcpServer(dbPath, rootDir) {
   const db = new CodeDatabase(dbPath);
   const server = new Server(
@@ -244,6 +285,20 @@ export async function runMcpServer(dbPath, rootDir) {
             },
             required: ['fromFile', 'toFile']
           }
+        },
+        {
+          name: 'read_file_content',
+          description: 'Read the full content of a specific file from the codebase (useful when file content was elided in the context pack).',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              filePath: {
+                type: 'string',
+                description: 'The path of the file to read (can be absolute or relative)'
+              }
+            },
+            required: ['filePath']
+          }
         }
       ]
     };
@@ -435,34 +490,10 @@ export async function runMcpServer(dbPath, rootDir) {
           }
           
           const estimateTokens = (str) => Math.ceil(str.length / 4);
-          const redactSecrets = (content) => {
-            let redacted = content;
-            redacted = redacted.replace(/\b(AKIA[0-9A-Z]{16})\b/g, '[REDACTED_AWS_KEY_ID]');
-            redacted = redacted.replace(/\bsk-(?:proj-|or-v1-)?[a-zA-Z0-9]{32,}\b/g, '[REDACTED_OPENAI_KEY]');
-            redacted = redacted.replace(/\bxox[bpa]-[a-zA-Z0-9-]{10,}\b/g, '[REDACTED_SLACK_TOKEN]');
-            const secretAssignRegex = /(secret|password|passwd|key|token|auth|credential|private_key|passphrase)\s*(?:=|:)\s*['"]([^'"]{8,})['"]/gi;
-            redacted = redacted.replace(secretAssignRegex, (match, param, val) => {
-              if (
-                val.includes('/') || 
-                val.includes('\\') || 
-                val.startsWith('http') || 
-                val === 'true' || 
-                val === 'false' || 
-                val.length < 12
-              ) {
-                return match;
-              }
-              const separator = match.includes(':') ? ':' : '=';
-              const quote = match.includes("'") ? "'" : '"';
-              return `${param}${separator}${quote}[REDACTED]${quote}`;
-            });
-            return redacted;
-          };
 
-          let packedOutput = format === 'markdown'
-            ? `<!-- HSS-CE Codebase Context Pack (Budget: ${budget} tokens) -->\n\n`
-            : `<!-- HSS-CE Codebase Context Pack (Budget: ${budget} tokens) -->\n`;
-          let currentTokens = estimateTokens(packedOutput);
+          // 1. Build codebase skeleton map section
+          let skeletonBlocks = '';
+          const skeletonFiles = [];
 
           for (const file of map) {
             const absoluteFilePath = path.join(rootDir, file.path);
@@ -474,54 +505,164 @@ export async function runMcpServer(dbPath, rootDir) {
             } catch {
               continue;
             }
-
             content = redactSecrets(content);
 
-            let useSkeleton = compact;
-            if (progressive && !useSkeleton) {
-              const isActive = activeFiles && activeFiles.includes(file.path);
-              if (currentTokens > 0.6 * budget && !isActive) {
-                useSkeleton = true;
+            let skelBlockContent = '';
+            const ext = path.extname(file.path);
+            const isJs = ['.js', '.ts', '.jsx', '.tsx'].includes(ext);
+            const isPy = ext === '.py';
+            if (isJs || isPy) {
+              skelBlockContent = generateSkeletonContent(content, ext, file.symbols, file.summary);
+            } else if (ext === '.json') {
+              skelBlockContent = compactJsonContent(content, file.path);
+            } else {
+              skelBlockContent = `// [File content elided. Use read_file_content("${file.path}") to inspect full content.]`;
+            }
+
+            let skelBlock = '';
+            if (format === 'markdown') {
+              let extName = ext.slice(1);
+              if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
+              if (extName === 'ts' || extName === 'js') extName = 'javascript';
+              if (extName === 'py') extName = 'python';
+              skelBlock = `### File: ${file.path} (Skeleton)\n\`\`\`${extName}\n${skelBlockContent}\n\`\`\`\n\n`;
+            } else {
+              skelBlock = `<file path="${file.path}" type="skeleton">\n${skelBlockContent}\n</file>\n`;
+            }
+
+            const skelTokens = estimateTokens(skelBlock);
+            if (estimateTokens(skeletonBlocks) + skelTokens + 200 > budget) {
+              break;
+            }
+
+            skeletonBlocks += skelBlock;
+            skeletonFiles.push({ file, content });
+          }
+
+          // Estimate tokens for header/stats
+          let headerAndStats = '';
+          if (format === 'markdown') {
+            headerAndStats = `<!-- HSS-CE Codebase Context Pack (Budget: ${budget} tokens) -->\n\n` +
+              `# HSS-CE Codebase Context Pack\n\n` +
+              `## 1. System Stats\n` +
+              `* Total Files: ${skeletonFiles.length}\n` +
+              `* Active Files: ${activeFiles ? activeFiles.length : 0}\n\n` +
+              `## 2. Codebase Skeleton Map\n`;
+          } else {
+            headerAndStats = `<!-- HSS-CE Codebase Context Pack (Budget: ${budget} tokens) -->\n` +
+              `<hss_ce_context_pack budget="${budget}">\n` +
+              `  <system_stats>\n` +
+              `    <total_files>${skeletonFiles.length}</total_files>\n` +
+              `    <active_files>${activeFiles ? activeFiles.length : 0}</active_files>\n` +
+              `  </system_stats>\n\n` +
+              `  <codebase_skeleton_map>\n`;
+          }
+
+          let currentTokens = estimateTokens(headerAndStats) + estimateTokens(skeletonBlocks);
+          if (format === 'xml') {
+            currentTokens += estimateTokens(`\n  </codebase_skeleton_map>\n`);
+          }
+
+          // 2. Select files to include as full content
+          const fullContentNonActive = [];
+          const fullContentActive = [];
+
+          if (!compact) {
+            const activeFilesList = [];
+            const nonActiveFilesList = [];
+
+            for (const item of skeletonFiles) {
+              const isActive = activeFiles && activeFiles.includes(item.file.path);
+              if (isActive) {
+                activeFilesList.push(item);
+              } else {
+                nonActiveFilesList.push(item);
               }
             }
 
-            const generateBlock = (fileContent, skeletonMode) => {
-              let procContent = fileContent;
-              if (skeletonMode) {
-                procContent = generateSkeletonContent(procContent, path.extname(file.path), file.symbols, file.summary);
+            // Prioritize active files first
+            for (const item of activeFilesList) {
+              let fileContent = item.content;
+              const ext = path.extname(item.file.path);
+              if (ext === '.json') {
+                fileContent = compactJsonContent(fileContent, item.file.path);
               } else if (noComments) {
-                procContent = stripComments(procContent, path.extname(file.path));
+                fileContent = stripComments(fileContent, ext);
               }
 
+              let fileBlock = '';
               if (format === 'markdown') {
-                let extName = path.extname(file.path).slice(1);
+                let extName = ext.slice(1);
                 if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
                 if (extName === 'ts' || extName === 'js') extName = 'javascript';
                 if (extName === 'py') extName = 'python';
-                return `## File: ${file.path}\n\`\`\`${extName}\n${procContent}\n\`\`\`\n\n`;
+                fileBlock = `### File: ${item.file.path}\n\`\`\`${extName}\n${fileContent}\n\`\`\`\n\n`;
               } else {
-                return `<file path="${file.path}">\n${procContent}\n</file>\n`;
-              }
-            };
-
-            let fileBlock = generateBlock(content, useSkeleton);
-            let fileTokens = estimateTokens(fileBlock);
-
-            if (currentTokens + fileTokens > budget) {
-              if (progressive && !useSkeleton) {
-                useSkeleton = true;
-                fileBlock = generateBlock(content, true);
-                fileTokens = estimateTokens(fileBlock);
+                fileBlock = `<file path="${item.file.path}">\n${fileContent}\n</file>\n`;
               }
 
-              if (currentTokens + fileTokens > budget) {
-                packedOutput += `\n<!-- Truncated: reached token budget of ${budget} tokens -->\n`;
-                break;
+              const fileTokens = estimateTokens(fileBlock);
+              if (currentTokens + fileTokens <= budget) {
+                fullContentActive.push(fileBlock);
+                currentTokens += fileTokens;
               }
             }
 
-            packedOutput += fileBlock;
-            currentTokens += fileTokens;
+            // Include non-active files next
+            for (const item of nonActiveFilesList) {
+              let fileContent = item.content;
+              const ext = path.extname(item.file.path);
+              if (ext === '.json') {
+                fileContent = compactJsonContent(fileContent, item.file.path);
+              } else if (noComments) {
+                fileContent = stripComments(fileContent, ext);
+              }
+
+              let fileBlock = '';
+              if (format === 'markdown') {
+                let extName = ext.slice(1);
+                if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
+                if (extName === 'ts' || extName === 'js') extName = 'javascript';
+                if (extName === 'py') extName = 'python';
+                fileBlock = `### File: ${item.file.path}\n\`\`\`${extName}\n${fileContent}\n\`\`\`\n\n`;
+              } else {
+                fileBlock = `<file path="${item.file.path}">\n${fileContent}\n</file>\n`;
+              }
+
+              const fileTokens = estimateTokens(fileBlock);
+              if (currentTokens + fileTokens <= budget) {
+                fullContentNonActive.push(fileBlock);
+                currentTokens += fileTokens;
+              }
+            }
+          }
+
+          // 3. Assemble final output
+          let packedOutput = headerAndStats + skeletonBlocks;
+
+          if (format === 'markdown') {
+            packedOutput += `## 3. Reference File Contents\n`;
+            if (fullContentNonActive.length === 0) {
+              packedOutput += `*No reference files included in full content (exceeded budget).*\n\n`;
+            } else {
+              packedOutput += fullContentNonActive.join('');
+            }
+
+            packedOutput += `## 4. Active Files (Focus)\n`;
+            if (fullContentActive.length === 0) {
+              packedOutput += `*No active files included in full content (exceeded budget).*\n\n`;
+            } else {
+              packedOutput += fullContentActive.join('');
+            }
+          } else {
+            packedOutput += `  </codebase_skeleton_map>\n\n` +
+              `  <reference_file_contents>\n` +
+              (fullContentNonActive.length > 0 ? fullContentNonActive.join('') : '') +
+              `  </reference_file_contents>\n\n` +
+              `  <active_file_contents>\n` +
+              (fullContentActive.length > 0 ? fullContentActive.join('') : '') +
+              `  </active_file_contents>\n` +
+              `</hss_ce_context_pack>\n`;
           }
 
           return {
@@ -916,6 +1057,47 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
               {
                 type: 'text',
                 text: outputText
+              }
+            ]
+          };
+        }
+
+        case 'read_file_content': {
+          const filePath = args?.filePath;
+          if (!filePath) {
+            throw new Error('filePath parameter is required');
+          }
+
+          const getRelativePath = (p) => {
+            if (path.isAbsolute(p)) {
+              return path.relative(rootDir, p);
+            }
+            if (p.startsWith('.')) {
+              return path.relative(rootDir, path.resolve(rootDir, p));
+            }
+            return p;
+          };
+
+          const relPath = getRelativePath(filePath);
+          const absPath = path.resolve(rootDir, relPath);
+
+          if (!fs.existsSync(absPath)) {
+            throw new Error(`File not found: ${relPath}`);
+          }
+
+          const content = fs.readFileSync(absPath, 'utf-8');
+          
+          let compacted = content;
+          if (path.extname(relPath) === '.json') {
+            compacted = compactJsonContent(content, relPath);
+          }
+          const redacted = redactSecrets(compacted);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: redacted
               }
             ]
           };

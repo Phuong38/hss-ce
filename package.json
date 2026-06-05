@@ -26,7 +26,7 @@
   },
   "homepage": "https://github.com/phuonglt/hss-ce#readme",
   "scripts": {
-    "test": "node tests/fts.test.js && node tests/pack.test.js && node tests/dependency_path.test.js"
+    "test": "node tests/fts.test.js && node tests/pack.test.js && node tests/dependency_path.test.js && node tests/compression.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.4.0"

@@ -20,6 +20,9 @@ HSS-CE is **not** a magical AI assistant that writes code for you. It is a struc
 * **Precise Symbol Navigation:** Instead of performing noisy text searches (like raw `grep` or `ripgrep`), agents use structured database queries to resolve exact function definitions and caller locations.
 * **Automated Redaction (Secret Guard):** Before packing codebase files to send to LLM context, HSS-CE automatically redacts credentials, private keys, and API tokens, preventing security leaks.
 * **Git-Aware Ignore System:** Automatically respects `.gitignore` rules in addition to local `.hssceignore` patterns, ensuring build artifacts, dependencies, and temporary files are excluded from the index.
+* **Cache-Aligned Context Packing:** Re-orders context packs to place stable components (skeleton maps, system stats) at the beginning of the prompt and dynamic content (active files) at the very end. This maximizes LLM provider KV caching hits, saving up to 50%+ on prompt cost and latency.
+* **Smart JSON Compaction:** Automatically minifies and compacts configuration files (like `package.json` devDependencies) to strip noise and reduce token consumption.
+* **Lazy Content Retrieval (CCR):** Exposes a `read_file_content` MCP tool so agents can receive lightweight codebase skeletons first and load full contents dynamically on-demand, enabling lossless token efficiency.
 
 ### 3. Current Limitations & What It is Not
 * **Regex-based, not AST-based:** HSS-CE uses fast, lightweight regex patterns to extract imports and symbols. While this makes it extremely fast and multi-language out-of-the-box, it may occasionally miss highly dynamic, metaprogrammed, or complex syntactical structures compared to a full abstract syntax tree (AST) compiler.
@@ -125,6 +128,7 @@ HSS-CE draws inspiration and features from several exceptional open-source tools
 - **[Graphify](https://github.com/safishamsi/graphify)** / **[CodeGraph](https://github.com/colbymchenry/codegraph)**: Inspires our structural codebase graph modeling, import tracking, and PageRank scoring.
 - **[CodeCTX](https://github.com/tavilyai/codectx)**: Inspires our personalized context boost around user active files.
 - **[Understand-Anything](https://github.com/Lum1104/Understand-Anything)**: Inspires our logical layering (entrypoint/service/storage), interactive visual dashboard highlighting, and guided onboarding tours.
+- **[RTK (Rust Token Killer)](https://github.com/rtk-ai/rtk) & [Headroom](https://github.com/chopratejas/headroom)**: Inspires our prompt cache KV-alignment, JSON compaction, and Content-Compressed Retrieval (CCR) strategies.
 
 ---
 

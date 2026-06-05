@@ -9,6 +9,23 @@ import * as fs from 'node:fs';
 
 const makeSafeId = (p) => p.replace(/[^a-zA-Z0-9]/g, '_');
 
+function compactJsonContent(content, filePath) {
+  try {
+    const obj = JSON.parse(content);
+    if (path.basename(filePath) === 'package.json') {
+      const compacted = {};
+      const keysToKeep = ['name', 'version', 'type', 'scripts', 'dependencies', 'devDependencies', 'peerDependencies', 'bin'];
+      for (const k of keysToKeep) {
+        if (obj[k] !== undefined) compacted[k] = obj[k];
+      }
+      return JSON.stringify(compacted);
+    }
+    return JSON.stringify(obj);
+  } catch (err) {
+    return content;
+  }
+}
+
 function getGroupForPath(filePath) {
   const p = filePath.replace(/\\/g, '/');
   const parts = p.split('/');
@@ -1083,11 +1100,10 @@ node src/cli.js mcp .
       if (sortOption === 'path') {
         map.sort((a, b) => a.path.localeCompare(b.path));
       }
-      
-      let packedOutput = packFormat === 'markdown'
-        ? `<!-- HSS-CE Codebase Context Pack (Budget: ${tokenBudget} tokens) -->\n\n`
-        : `<!-- HSS-CE Codebase Context Pack (Budget: ${tokenBudget} tokens) -->\n`;
-      let currentTokens = estimateTokens(packedOutput);
+
+      // 1. Build codebase skeleton map section
+      let skeletonBlocks = '';
+      const skeletonFiles = [];
 
       for (const file of map) {
         const absoluteFilePath = path.join(rootDir, file.path);
@@ -1099,54 +1115,165 @@ node src/cli.js mcp .
         } catch {
           continue;
         }
-
         content = redactSecrets(content);
 
-        let useSkeleton = compact;
-        if (progressive && !useSkeleton) {
-          const isActive = activeFiles && activeFiles.includes(file.path);
-          if (currentTokens > 0.6 * tokenBudget && !isActive) {
-            useSkeleton = true;
+        let skelBlockContent = '';
+        const ext = path.extname(file.path);
+        const isJs = ['.js', '.ts', '.jsx', '.tsx'].includes(ext);
+        const isPy = ext === '.py';
+        if (isJs || isPy) {
+          skelBlockContent = generateSkeletonContent(content, ext, file.symbols, file.summary);
+        } else if (ext === '.json') {
+          skelBlockContent = compactJsonContent(content, file.path);
+        } else {
+          skelBlockContent = `// [File content elided. Use read_file_content("${file.path}") to inspect full content.]`;
+        }
+
+        let skelBlock = '';
+        if (packFormat === 'markdown') {
+          let extName = ext.slice(1);
+          if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
+          if (extName === 'ts' || extName === 'js') extName = 'javascript';
+          if (extName === 'py') extName = 'python';
+          skelBlock = `### File: ${file.path} (Skeleton)\n\`\`\`${extName}\n${skelBlockContent}\n\`\`\`\n\n`;
+        } else {
+          skelBlock = `<file path="${file.path}" type="skeleton">\n${skelBlockContent}\n</file>\n`;
+        }
+
+        const skelTokens = estimateTokens(skelBlock);
+        if (estimateTokens(skeletonBlocks) + skelTokens + 200 > tokenBudget) {
+          break; // Stop adding skeletons if they exceed the entire budget
+        }
+
+        skeletonBlocks += skelBlock;
+        skeletonFiles.push({ file, content });
+      }
+
+      // Estimate tokens for header/stats
+      let headerAndStats = '';
+      if (packFormat === 'markdown') {
+        headerAndStats = `<!-- HSS-CE Codebase Context Pack (Budget: ${tokenBudget} tokens) -->\n\n` +
+          `# HSS-CE Codebase Context Pack\n\n` +
+          `## 1. System Stats\n` +
+          `* Total Files: ${skeletonFiles.length}\n` +
+          `* Active Files: ${activeFiles ? activeFiles.length : 0}\n\n` +
+          `## 2. Codebase Skeleton Map\n`;
+      } else {
+        headerAndStats = `<!-- HSS-CE Codebase Context Pack (Budget: ${tokenBudget} tokens) -->\n` +
+          `<hss_ce_context_pack budget="${tokenBudget}">\n` +
+          `  <system_stats>\n` +
+          `    <total_files>${skeletonFiles.length}</total_files>\n` +
+          `    <active_files>${activeFiles ? activeFiles.length : 0}</active_files>\n` +
+          `  </system_stats>\n\n` +
+          `  <codebase_skeleton_map>\n`;
+      }
+
+      let currentTokens = estimateTokens(headerAndStats) + estimateTokens(skeletonBlocks);
+      if (packFormat === 'xml') {
+        currentTokens += estimateTokens(`\n  </codebase_skeleton_map>\n`);
+      }
+
+      // 2. Select files to include as full content (if not in compact mode)
+      const fullContentNonActive = [];
+      const fullContentActive = [];
+
+      if (!compact) {
+        // Separate files into active and non-active
+        const activeFilesList = [];
+        const nonActiveFilesList = [];
+
+        for (const item of skeletonFiles) {
+          const isActive = activeFiles && activeFiles.includes(item.file.path);
+          if (isActive) {
+            activeFilesList.push(item);
+          } else {
+            nonActiveFilesList.push(item);
           }
         }
 
-        const generateBlock = (fileContent, skeletonMode) => {
-          let procContent = fileContent;
-          if (skeletonMode) {
-            procContent = generateSkeletonContent(procContent, path.extname(file.path), file.symbols, file.summary);
+        // Prioritize active files first
+        for (const item of activeFilesList) {
+          let fileContent = item.content;
+          const ext = path.extname(item.file.path);
+          if (ext === '.json') {
+            fileContent = compactJsonContent(fileContent, item.file.path);
           } else if (noComments) {
-            procContent = stripComments(procContent, path.extname(file.path));
+            fileContent = stripComments(fileContent, ext);
           }
 
+          let fileBlock = '';
           if (packFormat === 'markdown') {
-            let extName = path.extname(file.path).slice(1);
+            let extName = ext.slice(1);
             if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
             if (extName === 'ts' || extName === 'js') extName = 'javascript';
             if (extName === 'py') extName = 'python';
-            return `## File: ${file.path}\n\`\`\`${extName}\n${procContent}\n\`\`\`\n\n`;
+            fileBlock = `### File: ${item.file.path}\n\`\`\`${extName}\n${fileContent}\n\`\`\`\n\n`;
           } else {
-            return `<file path="${file.path}">\n${procContent}\n</file>\n`;
-          }
-        };
-
-        let fileBlock = generateBlock(content, useSkeleton);
-        let fileTokens = estimateTokens(fileBlock);
-
-        if (currentTokens + fileTokens > tokenBudget) {
-          if (progressive && !useSkeleton) {
-            useSkeleton = true;
-            fileBlock = generateBlock(content, true);
-            fileTokens = estimateTokens(fileBlock);
+            fileBlock = `<file path="${item.file.path}">\n${fileContent}\n</file>\n`;
           }
 
-          if (currentTokens + fileTokens > tokenBudget) {
-            packedOutput += `\n<!-- Truncated: reached token budget of ${tokenBudget} tokens -->\n`;
-            break;
+          const fileTokens = estimateTokens(fileBlock);
+          if (currentTokens + fileTokens <= tokenBudget) {
+            fullContentActive.push(fileBlock);
+            currentTokens += fileTokens;
           }
         }
 
-        packedOutput += fileBlock;
-        currentTokens += fileTokens;
+        // Include non-active files next
+        for (const item of nonActiveFilesList) {
+          let fileContent = item.content;
+          const ext = path.extname(item.file.path);
+          if (ext === '.json') {
+            fileContent = compactJsonContent(fileContent, item.file.path);
+          } else if (noComments) {
+            fileContent = stripComments(fileContent, ext);
+          }
+
+          let fileBlock = '';
+          if (packFormat === 'markdown') {
+            let extName = ext.slice(1);
+            if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
+            if (extName === 'ts' || extName === 'js') extName = 'javascript';
+            if (extName === 'py') extName = 'python';
+            fileBlock = `### File: ${item.file.path}\n\`\`\`${extName}\n${fileContent}\n\`\`\`\n\n`;
+          } else {
+            fileBlock = `<file path="${item.file.path}">\n${fileContent}\n</file>\n`;
+          }
+
+          const fileTokens = estimateTokens(fileBlock);
+          if (currentTokens + fileTokens <= tokenBudget) {
+            fullContentNonActive.push(fileBlock);
+            currentTokens += fileTokens;
+          }
+        }
+      }
+
+      // 3. Assemble final output
+      let packedOutput = headerAndStats + skeletonBlocks;
+
+      if (packFormat === 'markdown') {
+        packedOutput += `## 3. Reference File Contents\n`;
+        if (fullContentNonActive.length === 0) {
+          packedOutput += `*No reference files included in full content (exceeded budget).*\n\n`;
+        } else {
+          packedOutput += fullContentNonActive.join('');
+        }
+
+        packedOutput += `## 4. Active Files (Focus)\n`;
+        if (fullContentActive.length === 0) {
+          packedOutput += `*No active files included in full content (exceeded budget).*\n\n`;
+        } else {
+          packedOutput += fullContentActive.join('');
+        }
+      } else {
+        packedOutput += `  </codebase_skeleton_map>\n\n` +
+          `  <reference_file_contents>\n` +
+          (fullContentNonActive.length > 0 ? fullContentNonActive.join('') : '') +
+          `  </reference_file_contents>\n\n` +
+          `  <active_file_contents>\n` +
+          (fullContentActive.length > 0 ? fullContentActive.join('') : '') +
+          `  </active_file_contents>\n` +
+          `</hss_ce_context_pack>\n`;
       }
 
       if (outputFile) {
