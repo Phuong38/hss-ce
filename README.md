@@ -46,7 +46,9 @@ When you ask your agent (e.g. Claude Code or Cursor): *"Find all callers of the 
 3. Agent invokes `get_dependency_path(fromFile: "src/main.js", toFile: "src/db.js")` → HSS-CE traces and lists the step-by-step import path between files.
 4. Agent invokes `search_symbols(query: "auth")` → HSS-CE fuzzy matches against indexed symbols and returns definition details.
 5. Agent invokes `search_code(query: "TODO: fix", isRegex: false)` → HSS-CE performs a lightning-fast SQLite FTS5 index search, ranking results by BM25 relevance and PageRank structural importance.
-6. The agent reads only those specific files, completing the task with 90% fewer tokens and much higher accuracy.
+6. Agent invokes `check_index_drift()` → HSS-CE returns drift status to verify if index matches files on disk.
+7. Agent invokes `get_change_impact(target: "src/db.js", depth: 3)` → HSS-CE recursively traces upstream imports to assess blast radius before modifying any code.
+8. The agent reads only those specific files, completing the task with 90% fewer tokens and much higher accuracy.
 
 ---
 
@@ -117,6 +119,8 @@ If you prefer using the terminal manually, HSS-CE provides the following command
 | `hss-ce search-code <path> <q>` | `hss-ce search-code . TODO --regex` | Search text snippet/regex across indexed files. Add `--regex` for regex pattern. |
 | `hss-ce pack <path>` | `hss-ce pack . --budget=2000 --format=markdown --progressive --sort=path` | Package source/config/docs files into structured XML/Markdown for LLM context, with secret redacting. Supports progressive fallback compression to skeletons and deterministic sorting. |
 | `hss-ce enrich <path>` | `hss-ce enrich .` | (Optional) Fetch AI-generated summaries via Gemini API (requires `GEMINI_API_KEY`). |
+| `hss-ce status <path>` | `hss-ce status .` | Check if index has drifted from the local files on disk (modified/missing/untracked files). |
+| `hss-ce impact <path> <target>` | `hss-ce impact . src/db.js` | Trace recursive change impact blast radius (importers) for a file or symbol. Add `--depth=N` flag to set max traversal depth (default 5). |
 
 ---
 

@@ -1378,6 +1378,89 @@ node src/cli.js mcp .
       break;
     }
 
+    case 'status': {
+      if (!fs.existsSync(dbPath)) {
+        console.error(`Index not found at: ${dbPath}. Run "index" command first.`);
+        process.exit(1);
+      }
+      const db = new CodeDatabase(dbPath);
+      const indexer = new CodeIndexer(db, rootDir);
+      const drift = indexer.checkDrift();
+      
+      console.log(`\n=== HSS-CE CODEBASE INDEX STATUS ===`);
+      console.log(`Index location: ${dbPath}`);
+      if (drift.isStale) {
+        console.log(`\n⚠️  Status: STALE (index drifted from disk)`);
+        if (drift.staleFiles.length > 0) {
+          console.log(`\nModified files (${drift.staleFiles.length}):`);
+          drift.staleFiles.forEach(f => console.log(`  * ${f}`));
+        }
+        if (drift.missingFiles.length > 0) {
+          console.log(`\nMissing files (${drift.missingFiles.length}):`);
+          drift.missingFiles.forEach(f => console.log(`  * ${f}`));
+        }
+        if (drift.untrackedFiles.length > 0) {
+          console.log(`\nUntracked/New files (${drift.untrackedFiles.length}):`);
+          drift.untrackedFiles.forEach(f => console.log(`  * ${f}`));
+        }
+        console.log(`\nRun "hss-ce index ${targetPath}" to update the index.`);
+      } else {
+        console.log(`\n✅ Status: UP-TO-DATE`);
+        console.log(`Total files indexed: ${db.getAllFiles().length}`);
+      }
+      break;
+    }
+
+    case 'impact': {
+      if (!fs.existsSync(dbPath)) {
+        console.error(`Index not found at: ${dbPath}. Run "index" command first.`);
+        process.exit(1);
+      }
+      const extraArg = args.slice(1).filter(a => !a.startsWith('-') && a !== targetPath)[0];
+      if (!extraArg) {
+        console.error('Usage: hss-ce impact <path> <file-or-symbol>');
+        process.exit(1);
+      }
+      
+      const depthFlag = args.find(a => a.startsWith('--depth='));
+      const depth = depthFlag ? parseInt(depthFlag.split('=')[1], 10) : 5;
+      
+      const db = new CodeDatabase(dbPath);
+      
+      // If extraArg matches a file, let's normalize it to relative path
+      let normalizedArg = extraArg;
+      if (fs.existsSync(path.resolve(rootDir, extraArg))) {
+        normalizedArg = path.relative(rootDir, path.resolve(rootDir, extraArg));
+      }
+      
+      const impactResult = db.getChangeImpact(normalizedArg, depth);
+      
+      console.log(`\n=== CHANGE IMPACT ANALYSIS FOR "${extraArg}" ===`);
+      console.log(`Target Type: ${impactResult.type.toUpperCase()}`);
+      if (impactResult.type === 'unknown') {
+        console.log(`No matching file path or symbol definition found for "${extraArg}".`);
+      } else {
+        console.log(`Start File(s): ${impactResult.startFiles.join(', ')}`);
+        console.log(`Max Traversal Depth: ${depth}`);
+        console.log(`Blast Radius (Impacted Files count): ${impactResult.impactedFiles.length}`);
+        
+        if (impactResult.impactedFiles.length > 0) {
+          console.log('\nImpacted Files (recursively importing):');
+          // Sort by depth
+          impactResult.impactedFiles.forEach(imp => {
+            console.log(`\n🔹 [Depth ${imp.depth}] ${imp.filePath}`);
+            console.log(`   Import path chain:`);
+            imp.path.forEach((step, idx) => {
+              console.log(`     ${idx + 1}. [${step.from}] <-- (imports: ${step.symbol}) -- [${step.to}]`);
+            });
+          });
+        } else {
+          console.log('\nNo other files directly or indirectly import this target.');
+        }
+      }
+      break;
+    }
+
     default:
       console.error(`Unknown command: ${command}`);
       printUsage();
@@ -1412,6 +1495,9 @@ Commands:
   mcp <path>               Start MCP server (stdio transport).
   explore <path>           Start interactive local codebase explorer dashboard.
                            Flags: --port=3000
+  status <path>            Check if index has drifted from the local files.
+  impact <path> <target>   Analyze recursive change impact blast radius for a file or symbol.
+                           Flags: --depth=5 (maximum depth of traversal)
 `);
 }
 

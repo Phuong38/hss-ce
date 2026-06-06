@@ -324,4 +324,66 @@ export class CodeDatabase {
     }
     return map;
   }
+
+  getChangeImpact(target, maxDepth = 5) {
+    let startFiles = [];
+    
+    // Check if target is a file
+    const fileCheck = this.db.prepare('SELECT path FROM files WHERE path = ?;').all(target);
+    if (fileCheck.length > 0) {
+      startFiles.push(target);
+    } else {
+      // Check if target matches symbol name
+      const symbolCheck = this.db.prepare('SELECT DISTINCT file_path FROM symbols WHERE name = ?;').all(target);
+      if (symbolCheck.length > 0) {
+        startFiles = symbolCheck.map(r => r.file_path);
+      }
+    }
+    
+    if (startFiles.length === 0) {
+      return {
+        target,
+        type: 'unknown',
+        impactedFiles: []
+      };
+    }
+    
+    const targetType = fileCheck.length > 0 ? 'file' : 'symbol';
+    const visited = new Set(startFiles);
+    const queue = [];
+    const impactedFiles = [];
+    
+    for (const file of startFiles) {
+      queue.push({ file, depth: 0, path: [] });
+    }
+    
+    while (queue.length > 0) {
+      const { file, depth, path } = queue.shift();
+      if (depth >= maxDepth) continue;
+      
+      const stmt = this.db.prepare('SELECT from_file, symbol FROM dependencies WHERE to_file = ?;');
+      const importers = stmt.all(file);
+      
+      for (const imp of importers) {
+        if (!visited.has(imp.from_file)) {
+          visited.add(imp.from_file);
+          const newPath = [...path, { from: file, to: imp.from_file, symbol: imp.symbol }];
+          impactedFiles.push({
+            filePath: imp.from_file,
+            depth: depth + 1,
+            importedSymbol: imp.symbol,
+            path: newPath
+          });
+          queue.push({ file: imp.from_file, depth: depth + 1, path: newPath });
+        }
+      }
+    }
+    
+    return {
+      target,
+      type: targetType,
+      startFiles,
+      impactedFiles
+    };
+  }
 }

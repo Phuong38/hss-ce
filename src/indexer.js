@@ -443,4 +443,42 @@ export class CodeIndexer {
 
     console.log('Indexing completed successfully.');
   }
+
+  checkDrift() {
+    const allFiles = this.getFiles(this.rootDir);
+    const dbFiles = this.db.getAllFiles();
+    const dbFilesMap = new Map(dbFiles.map(f => [f.path, f]));
+    
+    const staleFiles = [];
+    const missingFiles = [];
+    const untrackedFiles = [];
+    
+    const diskPaths = new Set();
+    
+    for (const filePath of allFiles) {
+      const relativePath = path.relative(this.rootDir, filePath);
+      diskPaths.add(relativePath);
+      const currentHash = this.getFileHash(filePath);
+      
+      const dbFile = dbFilesMap.get(relativePath);
+      if (!dbFile) {
+        untrackedFiles.push(relativePath);
+      } else if (dbFile.hash !== currentHash) {
+        staleFiles.push(relativePath);
+      }
+    }
+    
+    for (const dbFile of dbFiles) {
+      if (!diskPaths.has(dbFile.path)) {
+        missingFiles.push(dbFile.path);
+      }
+    }
+    
+    return {
+      isStale: staleFiles.length > 0 || missingFiles.length > 0 || untrackedFiles.length > 0,
+      staleFiles,
+      missingFiles,
+      untrackedFiles
+    };
+  }
 }

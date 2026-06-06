@@ -299,6 +299,33 @@ export async function runMcpServer(dbPath, rootDir) {
             },
             required: ['filePath']
           }
+        },
+        {
+          name: 'check_index_drift',
+          description: 'Check if the codebase index has drifted from the actual files on disk (modified files, missing files, untracked/new files).',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'get_change_impact',
+          description: 'Analyze recursive change impact blast radius (importers) for a file path or symbol.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              target: {
+                type: 'string',
+                description: 'The file path (relative or absolute) or symbol name to analyze'
+              },
+              depth: {
+                type: 'integer',
+                description: 'Maximum traversal depth (default 5)',
+                default: 5
+              }
+            },
+            required: ['target']
+          }
         }
       ]
     };
@@ -1098,6 +1125,42 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
               {
                 type: 'text',
                 text: redacted
+              }
+            ]
+          };
+        }
+
+        case 'check_index_drift': {
+          const indexer = new CodeIndexer(db, rootDir);
+          const drift = indexer.checkDrift();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(drift, null, 2)
+              }
+            ]
+          };
+        }
+
+        case 'get_change_impact': {
+          const target = args?.target;
+          const depth = args?.depth !== undefined ? args.depth : 5;
+          if (!target) {
+            throw new Error('target parameter is required');
+          }
+          
+          let normalizedArg = target;
+          if (fs.existsSync(path.resolve(rootDir, target))) {
+            normalizedArg = path.relative(rootDir, path.resolve(rootDir, target));
+          }
+          
+          const impact = db.getChangeImpact(normalizedArg, depth);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(impact, null, 2)
               }
             ]
           };
