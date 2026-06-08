@@ -122,6 +122,34 @@ If you prefer using the terminal manually, HSS-CE provides the following command
 | `hss-ce status <path>` | `hss-ce status .` | Check if index has drifted from the local files on disk (modified/missing/untracked files). |
 | `hss-ce impact <path> <target>` | `hss-ce impact . src/db.js` | Trace recursive change impact blast radius (importers) for a file or symbol. Add `--depth=N` flag to set max traversal depth (default 5). |
 
+## HSS-CE vs. 2026 Context & Agent Landscapes
+
+As of mid-2026, the AI agent ecosystem has evolved significantly. Below is a comparative analysis of HSS-CE against leading context and agent frameworks, along with our roadmap inspired by their architectures:
+
+### 1. Comparative Analysis
+
+| Feature | HSS-CE | Headroom (`chopratejas/headroom`) | CodeGraph (`colbymchenry/codegraph`) | Claude-Context (`zilliztech/claude-context`) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Parsing Engine** | Regex-based (Fast, multi-language) | AST-aware (Languages-specific) | Tree-sitter AST (High accuracy) | AST-aware chunking |
+| **Search Method** | SQLite FTS5 (Local keyword/BM25) | Heuristic compression & retrieval | SQLite query/Call-graph lookup | Semantic vector search (Milvus) |
+| **Context Compression**| PageRank elision & Skeleton mode | SmartCrusher (JSON), CodeCompressor | Signature elision | Embedding-based filtering |
+| **Sync Mechanism** | Git hooks / CLI commands | Filesystem events / Proxy | Native FS watchers | Merkle trees |
+| **Deployment** | 100% Offline (Local CLI/MCP) | Proxy / MCP server | 100% Offline (Local MCP) | Hybrid/Cloud (Requires DB & Key) |
+
+### 2. Key Architectural Lessons
+*   **Tree-sitter AST Parsing:** CodeGraph demonstrates that transitioning from regex parsing to Tree-sitter AST parsing significantly improves symbol resolution accuracy and cross-file import tracking, particularly for complex JS/TS/Python syntax.
+*   **Context-Compressed Retrieval (CCR) & KV Caching:** Headroom's prefix alignment and JSON `SmartCrusher` show that optimization of LLM prompt caches is a critical factor in latency and cost reduction.
+*   **Semantic Local Search:** Claude-Context's use of embeddings highlights the value of semantic search, which HSS-CE can adopt locally via lightweight libraries like `sqlite-vss` to avoid external API calls.
+
+### 3. HSS-CE Future Roadmap & Implementation Plan
+*   **Phase 1: AST-Aware Parsing (Tree-sitter)**
+    *   *Goal:* Integrate Tree-sitter AST parsers for JS/TS/Python to replace regex-based dependency/symbol parsing.
+    *   *Testing:* Validate against `tests/dependency_path.test.js` to ensure zero regression in caller mapping.
+*   **Phase 2: KV-Cache prefix alignment**
+    *   *Goal:* Implement deterministic prompt formatting to lock stable context chunks (e.g. system instructions, skeleton structures) at the beginning of prompt outputs.
+*   **Phase 3: Real-Time Sync Watcher**
+    *   *Goal:* Add a local file watcher using `chokidar` to automatically sync SQLite `.hss-ce/graph.db` on file change events.
+
 ---
 
 ## Inspirations & Credits
