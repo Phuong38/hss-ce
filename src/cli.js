@@ -276,6 +276,18 @@ try {
       break;
     }
 
+    case 'watch': {
+      const db = new CodeDatabase(dbPath);
+      const indexer = new CodeIndexer(db, rootDir);
+      const debounceFlag = args.find(a => a.startsWith('--debounce='));
+      const debounceMs = debounceFlag ? parseInt(debounceFlag.split('=')[1], 10) : 300;
+      indexer.watch({ debounceMs });
+      console.log('Press Ctrl+C to stop.');
+      process.stdin.resume();
+      break;
+    }
+
+
     case 'map': {
       const db = new CodeDatabase(dbPath);
       const map = db.getSkeletonMap();
@@ -1478,6 +1490,8 @@ Usage: hss-ce <command> <path> [arguments/flags]
 Commands:
   index <path>             Parse and build code graph database.
                            Flags: --active=file1,file2 (boost files in PageRank)
+  watch <path>             Monitor codebase files and sync index in real-time.
+                           Flags: --debounce=300 (delay in ms before re-indexing)
   map <path>               Print cached skeleton map (PageRank ordered).
                            Flags: --compact (elide to signatures under budget), --budget=1000
   query <path> <symbol>    Lookup definition and callers for a symbol.

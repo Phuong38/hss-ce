@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { parse as babelParse } from '@babel/parser';
 
 function getLineNumber(content, index) {
   return content.slice(0, index).split('\n').length;
@@ -79,7 +80,216 @@ export function parseFile(filePath) {
   return { symbols, imports, summary, complexity };
 }
 
+function walk(node, callback) {
+  if (!node) return;
+  callback(node);
+  for (const key in node) {
+    const child = node[key];
+    if (child && typeof child === 'object') {
+      if (Array.isArray(child)) {
+        for (const item of child) {
+          if (item && typeof item.type === 'string') {
+            walk(item, callback);
+          }
+        }
+      } else if (typeof child.type === 'string') {
+        walk(child, callback);
+      }
+    }
+  }
+}
+
 function parseJS(content, symbols, imports) {
+  try {
+    const ast = babelParse(content, {
+      sourceType: 'module',
+      plugins: [
+        'typescript',
+        'jsx',
+        'decorators-legacy',
+        'classProperties',
+        'classPrivateProperties',
+        'classPrivateMethods',
+        'exportDefaultFrom',
+        'dynamicImport'
+      ],
+      errorRecovery: true
+    });
+
+    const getSourceSlice = (start, end) => content.slice(start, end).trim();
+
+    walk(ast, (node) => {
+      // 1. Imports
+      if (node.type === 'ImportDeclaration') {
+        const fromPath = node.source.value;
+        node.specifiers.forEach(spec => {
+          if (spec.type === 'ImportDefaultSpecifier' || spec.type === 'ImportNamespaceSpecifier' || spec.type === 'ImportSpecifier') {
+            imports.push({
+              symbol: spec.local.name,
+              from: fromPath
+            });
+          }
+        });
+      }
+
+      // 2. Classes
+      else if (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') {
+        if (node.id) {
+          const name = node.id.name;
+          const startLine = node.loc ? node.loc.start.line : 1;
+          const endLine = node.loc ? node.loc.end.line : startLine;
+          let signature = '';
+          if (node.body && node.body.start) {
+            signature = getSourceSlice(node.start, node.body.start);
+            if (signature.endsWith('{')) signature = signature.slice(0, -1).trim();
+          } else {
+            signature = `class ${name}`;
+            if (node.superClass) {
+              const baseName = node.superClass.name || node.superClass.id?.name || 'Base';
+              signature += ` extends ${baseName}`;
+            }
+          }
+          symbols.push({
+            name,
+            type: 'class',
+            signature,
+            startLine,
+            endLine
+          });
+        }
+      }
+
+      // 3. Function Declarations
+      else if (node.type === 'FunctionDeclaration') {
+        if (node.id) {
+          const name = node.id.name;
+          const startLine = node.loc ? node.loc.start.line : 1;
+          const endLine = node.loc ? node.loc.end.line : startLine;
+          let signature = '';
+          if (node.body && node.body.start) {
+            signature = getSourceSlice(node.start, node.body.start);
+            if (signature.endsWith('{')) signature = signature.slice(0, -1).trim();
+          } else {
+            signature = `function ${name}()`;
+          }
+          symbols.push({
+            name,
+            type: 'function',
+            signature,
+            startLine,
+            endLine
+          });
+        }
+      }
+
+      // 4. Arrow Functions / Constant Functions declared via variables
+      else if (node.type === 'VariableDeclaration') {
+        node.declarations.forEach(decl => {
+          if (decl.id && decl.id.type === 'Identifier') {
+            const name = decl.id.name;
+            const init = decl.init;
+            if (init && (init.type === 'ArrowFunctionExpression' || init.type === 'FunctionExpression')) {
+              const startLine = node.loc ? node.loc.start.line : 1;
+              const endLine = node.loc ? node.loc.end.line : startLine;
+              let signature = '';
+              if (init.body && init.body.start) {
+                signature = getSourceSlice(node.start, init.body.start);
+                if (signature.endsWith('{')) signature = signature.slice(0, -1).trim();
+                if (signature.endsWith('=>')) {
+                  signature = `${signature} ...`;
+                }
+              } else {
+                signature = `const ${name} = () => ...`;
+              }
+              signature = signature.replace(/\s+/g, ' ');
+              symbols.push({
+                name,
+                type: 'function',
+                signature,
+                startLine,
+                endLine
+              });
+            }
+          }
+        });
+      }
+
+      // 5. Express/Route definitions
+      else if (node.type === 'CallExpression') {
+        const callee = node.callee;
+        if (callee.type === 'MemberExpression') {
+          const obj = callee.object;
+          const prop = callee.property;
+          if (
+            obj.type === 'Identifier' &&
+            (obj.name === 'app' || obj.name === 'router') &&
+            prop.type === 'Identifier' &&
+            ['get', 'post', 'put', 'delete', 'patch'].includes(prop.name)
+          ) {
+            const method = prop.name.toUpperCase();
+            if (node.arguments.length > 0) {
+              const arg = node.arguments[0];
+              if (arg.type === 'StringLiteral' || arg.type === 'Literal') {
+                const routePath = arg.value;
+                const name = `${method} ${routePath}`;
+                const startLine = node.loc ? node.loc.start.line : 1;
+                const endLine = node.loc ? node.loc.end.line : startLine;
+                symbols.push({
+                  name,
+                  type: 'route',
+                  signature: `${method} ${routePath}`,
+                  startLine,
+                  endLine
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // 6. Interfaces
+      else if (node.type === 'TSInterfaceDeclaration') {
+        const name = node.id.name;
+        const startLine = node.loc ? node.loc.start.line : 1;
+        const endLine = node.loc ? node.loc.end.line : startLine;
+        let signature = '';
+        if (node.body && node.body.start) {
+          signature = getSourceSlice(node.start, node.body.start);
+          if (signature.endsWith('{')) signature = signature.slice(0, -1).trim();
+        } else {
+          signature = `interface ${name}`;
+        }
+        symbols.push({
+          name,
+          type: 'interface',
+          signature,
+          startLine,
+          endLine
+        });
+      }
+
+      // 7. Types
+      else if (node.type === 'TSTypeAliasDeclaration') {
+        const name = node.id.name;
+        const startLine = node.loc ? node.loc.start.line : 1;
+        const endLine = node.loc ? node.loc.end.line : startLine;
+        const signature = getSourceSlice(node.start, node.end).replace(/;$/, '').trim();
+        symbols.push({
+          name,
+          type: 'type',
+          signature,
+          startLine,
+          endLine
+        });
+      }
+    });
+
+  } catch (err) {
+    parseJSRegex(content, symbols, imports);
+  }
+}
+
+function parseJSRegex(content, symbols, imports) {
   // 1. Imports
   // Pattern: import defaultVal, { val1, val2 } from 'module'
   // Simplified matching for import statements
