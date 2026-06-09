@@ -110,6 +110,7 @@ If you prefer using the terminal manually, HSS-CE provides the following command
 | Command | Usage | Description |
 |---|---|---|
 | `hss-ce index <path>` | `hss-ce index .` | Scan codebase structure and build local index. Add `-f` to force re-scan. |
+| `hss-ce watch <path>` | `hss-ce watch .` | Monitor codebase files and sync index in real-time. Add `--debounce=300` to set delay in ms. |
 | `hss-ce map <path>` | `hss-ce map . --compact` | Print PageRank-ordered file structure. Add `--budget=1000` to limit tokens. |
 | `hss-ce doc <path>` | `hss-ce doc .` | Regenerate `CODEBASE.md` and `architecture.html` dashboard. |
 | `hss-ce tour <path>` | `hss-ce tour .` | Display a step-by-step onboarding walkthrough tour of the codebase. |
@@ -147,7 +148,7 @@ As of mid-2026, the AI agent ecosystem has evolved significantly. Below is a com
     *   *Testing:* Validate against `tests/dependency_path.test.js` to ensure zero regression in caller mapping.
 *   **Phase 2: KV-Cache prefix alignment**
     *   *Goal:* Implement deterministic prompt formatting to lock stable context chunks (e.g. system instructions, skeleton structures) at the beginning of prompt outputs.
-*   **Phase 3: Real-Time Sync Watcher**
+*   **Phase 3: Real-Time Sync Watcher (Completed)**
     *   *Goal:* Add a local file watcher using `chokidar` to automatically sync SQLite `.hss-ce/graph.db` on file change events.
 
 ---
