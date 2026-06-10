@@ -281,11 +281,22 @@ try {
       const indexer = new CodeIndexer(db, rootDir);
       const debounceFlag = args.find(a => a.startsWith('--debounce='));
       const debounceMs = debounceFlag ? parseInt(debounceFlag.split('=')[1], 10) : 300;
-      indexer.watch({ debounceMs });
+      const watcher = indexer.watch({ debounceMs });
+
+      const shutdown = async () => {
+        console.log('\nShutting down watcher...');
+        await watcher.close();
+        process.exit(0);
+      };
+
+      process.on('SIGINT', shutdown);
+      process.on('SIGTERM', shutdown);
+
       console.log('Press Ctrl+C to stop.');
       process.stdin.resume();
       break;
     }
+
 
 
     case 'map': {

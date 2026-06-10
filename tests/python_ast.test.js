@@ -98,15 +98,18 @@ try {
   console.log('Test 2: Parsing python file with syntax error...');
   const errorFile = path.join(tempWorkspace, 'error.py');
   fs.writeFileSync(errorFile, `
-# Unfinished class syntax
-class BadSyntax
-  def foo():
-    pass
+class BadSyntax(BaseClass):
+    print "invalid python 3 syntax but matches regex"
 `);
   const errorResult = parseFile(errorFile);
   assert.ok(errorResult, 'Should fall back gracefully and return result even on syntax error');
   // Check that regex parser was used as fallback
   console.log('Error result symbols:', errorResult.symbols);
+  const fallbackClass = errorResult.symbols.find(s => s.name === 'BadSyntax');
+  assert.ok(fallbackClass, 'Fallback should extract class symbol using regex');
+  assert.strictEqual(fallbackClass.type, 'class');
+  assert.strictEqual(fallbackClass.signature, 'class BadSyntax(BaseClass)');
+
 
   console.log('✅ ALL PYTHON AST PARSING TESTS PASSED SUCCESSFULLY!');
 } catch (err) {

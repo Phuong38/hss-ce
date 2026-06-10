@@ -133,7 +133,7 @@ As of mid-2026, the AI agent ecosystem has evolved significantly. Below is a com
 
 | Feature | HSS-CE | Headroom (`chopratejas/headroom`) | CodeGraph (`colbymchenry/codegraph`) | Claude-Context (`zilliztech/claude-context`) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Parsing Engine** | Regex-based (Fast, multi-language) | AST-aware (Languages-specific) | Tree-sitter AST (High accuracy) | AST-aware chunking |
+| **Parsing Engine** | Hybrid (AST-aware for JS/TS & Python, regex fallback) | AST-aware (Languages-specific) | Tree-sitter AST (High accuracy) | AST-aware chunking |
 | **Search Method** | SQLite FTS5 (Local keyword/BM25) | Heuristic compression & retrieval | SQLite query/Call-graph lookup | Semantic vector search (Milvus) |
 | **Context Compression**| PageRank elision & Skeleton mode | SmartCrusher (JSON), CodeCompressor | Signature elision | Embedding-based filtering |
 | **Sync Mechanism** | Git hooks / CLI commands | Filesystem events / Proxy | Native FS watchers | Merkle trees |

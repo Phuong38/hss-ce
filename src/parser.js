@@ -720,16 +720,20 @@ def parse_py(filepath):
         def visit_ClassDef(self, node):
             bases = []
             for b in node.bases:
+                resolved = None
                 if hasattr(ast, 'unparse'):
                     try:
-                        bases.append(ast.unparse(b))
+                        resolved = ast.unparse(b)
                     except:
                         pass
-                if not bases:
+                if not resolved:
                     if isinstance(b, ast.Name):
-                        bases.append(b.id)
+                        resolved = b.id
                     elif isinstance(b, ast.Attribute):
-                        bases.append(f"{b.value.id if isinstance(b.value, ast.Name) else ''}.{b.attr}")
+                        resolved = f"{b.value.id if isinstance(b.value, ast.Name) else ''}.{b.attr}"
+                if resolved:
+                    bases.append(resolved)
+
             signature = f"class {node.name}"
             if bases:
                 signature += f"({', '.join(bases)})"
@@ -805,7 +809,8 @@ function parsePythonAST(filePath) {
     const output = execFileSync('python3', ['-', filePath], {
       input: PYTHON_AST_PARSER_SCRIPT,
       encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'ignore']
+      stdio: ['pipe', 'pipe', 'ignore'],
+      timeout: 30000
     });
     const parsed = JSON.parse(output.trim());
     if (parsed.error) {
