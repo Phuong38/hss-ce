@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parse as babelParse } from '@babel/parser';
+import { execFileSync } from 'node:child_process';
 
 function getLineNumber(content, index) {
   return content.slice(0, index).split('\n').length;
@@ -54,13 +55,23 @@ export function parseFile(filePath) {
   
   const symbols = [];
   const imports = [];
-  const summary = extractSummary(content, ext);
+  let summary = extractSummary(content, ext);
 
   if (ext === '.js' || ext === '.ts' || ext === '.jsx' || ext === '.tsx') {
     parseJS(content, symbols, imports);
   } else if (ext === '.py') {
-    parsePython(content, symbols, imports);
+    const astResult = parsePythonAST(filePath);
+    if (astResult) {
+      symbols.push(...astResult.symbols);
+      imports.push(...astResult.imports);
+      if (astResult.summary) {
+        summary = astResult.summary;
+      }
+    } else {
+      parsePython(content, symbols, imports);
+    }
   }
+
 
   // Calculate complexity heuristic (control flow keywords + symbol count)
   const controlKeywords = [
@@ -671,4 +682,138 @@ export function generateSkeletonContent(content, ext, symbols = [], summary = nu
 
   return lines.join('\n');
 }
+
+const PYTHON_AST_PARSER_SCRIPT = `
+import ast
+import json
+import sys
+
+def parse_py(filepath):
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        tree = ast.parse(content, filename=filepath)
+    except Exception as e:
+        print(json.dumps({'error': str(e)}))
+        sys.exit(1)
+
+    symbols = []
+    imports = []
+    
+    summary = ast.get_docstring(tree)
+    if summary:
+        summary = summary.split('\\n')[0].strip()
+
+    class Visitor(ast.NodeVisitor):
+        def visit_Import(self, node):
+            for name in node.names:
+                imports.append({'symbol': name.asname or name.name, 'from': name.name})
+            self.generic_visit(node)
+
+        def visit_ImportFrom(self, node):
+            module = node.module or ''
+            for name in node.names:
+                imports.append({'symbol': name.asname or name.name, 'from': module})
+            self.generic_visit(node)
+
+        def visit_ClassDef(self, node):
+            bases = []
+            for b in node.bases:
+                if hasattr(ast, 'unparse'):
+                    try:
+                        bases.append(ast.unparse(b))
+                    except:
+                        pass
+                if not bases:
+                    if isinstance(b, ast.Name):
+                        bases.append(b.id)
+                    elif isinstance(b, ast.Attribute):
+                        bases.append(f"{b.value.id if isinstance(b.value, ast.Name) else ''}.{b.attr}")
+            signature = f"class {node.name}"
+            if bases:
+                signature += f"({', '.join(bases)})"
+            symbols.append({
+                'name': node.name,
+                'type': 'class',
+                'signature': signature,
+                'startLine': node.lineno,
+                'endLine': getattr(node, 'end_lineno', node.lineno)
+            })
+            self.generic_visit(node)
+
+        def visit_FunctionDef(self, node):
+            self.handle_func(node)
+            self.generic_visit(node)
+
+        def visit_AsyncFunctionDef(self, node):
+            self.handle_func(node, is_async=True)
+            self.generic_visit(node)
+
+        def handle_func(self, node, is_async=False):
+            args = []
+            for arg in node.args.args:
+                args.append(arg.arg)
+            
+            is_route = False
+            route_signature = ""
+            for dec in node.decorator_list:
+                if isinstance(dec, ast.Call):
+                    func = dec.func
+                    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+                        if func.value.id in ('app', 'router') and func.attr in ('get', 'post', 'put', 'delete', 'patch'):
+                            is_route = True
+                            route_path = ""
+                            if dec.args:
+                                first_arg = dec.args[0]
+                                if isinstance(first_arg, ast.Constant):
+                                    route_path = str(first_arg.value)
+                                elif isinstance(first_arg, ast.Str):
+                                    route_path = str(first_arg.s)
+                            route_signature = f"{func.attr.upper()} {route_path}"
+            
+            sig_prefix = "async def" if is_async else "def"
+            sig = f"{sig_prefix} {node.name}({', '.join(args)})"
+            symbols.append({
+                'name': node.name,
+                'type': 'function',
+                'signature': sig,
+                'startLine': node.lineno,
+                'endLine': getattr(node, 'end_lineno', node.lineno)
+            })
+            if is_route:
+                symbols.append({
+                    'name': route_signature,
+                    'type': 'route',
+                    'signature': route_signature,
+                    'startLine': node.lineno,
+                    'endLine': getattr(node, 'end_lineno', node.lineno)
+                })
+
+    Visitor().visit(tree)
+    print(json.dumps({'symbols': symbols, 'imports': imports, 'summary': summary}))
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        sys.exit(1)
+    parse_py(sys.argv[1])
+`;
+
+
+function parsePythonAST(filePath) {
+  try {
+    const output = execFileSync('python3', ['-', filePath], {
+      input: PYTHON_AST_PARSER_SCRIPT,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'ignore']
+    });
+    const parsed = JSON.parse(output.trim());
+    if (parsed.error) {
+      return null;
+    }
+    return parsed;
+  } catch (err) {
+    return null;
+  }
+}
+
 

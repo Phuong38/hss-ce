@@ -2,7 +2,8 @@
 
 HSS-CE is a lightweight, offline-first codebase indexer and Model Context Protocol (MCP) server. It optimizes how developers and AI coding agents explore, map, and interact with complex codebases.
 
-By calculating file significance using a simplified reference-count **PageRank** and parsing code structures (classes, functions, endpoints) using high-performance regex parsers, HSS-CE provides high-density context without wasting your token budget.
+By calculating file significance using a simplified reference-count **PageRank** and parsing code structures (classes, functions, endpoints) using AST-aware parsing for Python and high-performance parser/regex engines for other languages, HSS-CE provides high-density context without wasting your token budget.
+
 
 ---
 
@@ -25,8 +26,9 @@ HSS-CE is **not** a magical AI assistant that writes code for you. It is a struc
 * **Lazy Content Retrieval (CCR):** Exposes a `read_file_content` MCP tool so agents can receive lightweight codebase skeletons first and load full contents dynamically on-demand, enabling lossless token efficiency.
 
 ### 3. Current Limitations & What It is Not
-* **Regex-based, not AST-based:** HSS-CE uses fast, lightweight regex patterns to extract imports and symbols. While this makes it extremely fast and multi-language out-of-the-box, it may occasionally miss highly dynamic, metaprogrammed, or complex syntactical structures compared to a full abstract syntax tree (AST) compiler.
+* **Hybrid AST-Regex Parsing Engine:** HSS-CE uses high-performance syntax parsers (Babel for JS/TS, Python AST module for Python) to resolve symbols, imports, and metadata accurately. For unsupported languages, it falls back to lightweight regex-based heuristic parsing. This balances parser speed, accuracy, and extensibility.
 * **Dependency on Code Quality:** Local file summaries are parsed from comments/docstrings. If your codebase has zero comments, the summaries will be empty unless you explicitly run the remote LLM enrichment command (`hss-ce enrich`).
+
 
 ---
 
@@ -143,9 +145,10 @@ As of mid-2026, the AI agent ecosystem has evolved significantly. Below is a com
 *   **Semantic Local Search:** Claude-Context's use of embeddings highlights the value of semantic search, which HSS-CE can adopt locally via lightweight libraries like `sqlite-vss` to avoid external API calls.
 
 ### 3. HSS-CE Future Roadmap & Implementation Plan
-*   **Phase 1: AST-Aware Parsing (Tree-sitter)**
-    *   *Goal:* Integrate Tree-sitter AST parsers for JS/TS/Python to replace regex-based dependency/symbol parsing.
-    *   *Testing:* Validate against `tests/dependency_path.test.js` to ensure zero regression in caller mapping.
+*   **Phase 1: AST-Aware Parsing (Completed for Python; Broader Tree-sitter Planned)**
+    *   *Goal:* Integrate AST parsers (Node.js Babel for JS/TS, python3 `ast` module for Python) to resolve signatures, imports, inheritance, and decorator routes.
+    *   *Testing:* Verified with `tests/python_ast.test.js` and existing tests.
+
 *   **Phase 2: KV-Cache prefix alignment**
     *   *Goal:* Implement deterministic prompt formatting to lock stable context chunks (e.g. system instructions, skeleton structures) at the beginning of prompt outputs.
 *   **Phase 3: Real-Time Sync Watcher (Completed)**
