@@ -26,8 +26,9 @@
   },
   "homepage": "https://github.com/phuonglt/hss-ce#readme",
   "scripts": {
-    "test": "node tests/fts.test.js && node tests/pack.test.js && node tests/dependency_path.test.js && node tests/compression.test.js && node tests/drift_impact.test.js && node tests/watch.test.js"
+    "test": "node tests/fts.test.js && node tests/pack.test.js && node tests/dependency_path.test.js && node tests/compression.test.js && node tests/drift_impact.test.js && node tests/watch.test.js && node tests/python_ast.test.js"
   },
+
   "dependencies": {
     "@babel/parser": "^7.29.7",
     "@modelcontextprotocol/sdk": "^1.4.0",

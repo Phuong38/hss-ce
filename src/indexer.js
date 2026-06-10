@@ -263,7 +263,6 @@ export class CodeIndexer {
     let skippedCount = 0;
 
     // Track raw imports to resolve after parsing
-    // Structure: Map<filePath, Array<{ symbol, from }>>
     const rawImportsMap = new Map();
 
     for (const filePath of allFiles) {
@@ -276,43 +275,10 @@ export class CodeIndexer {
 
       if (needsParsing) {
         parsedCount++;
-        // Clear previous state of the file
-        this.db.clearFileSymbolsAndDependencies(relativePath);
-
-        try {
-          const { symbols, imports, summary, complexity } = parseFile(filePath);
-          const layer = determineLayer(relativePath, symbols);
-          this.db.saveFile(relativePath, currentHash, layer, summary, complexity);
-          
-          // Save file content to FTS
-          try {
-            const fileContent = fs.readFileSync(filePath, 'utf-8');
-            this.db.saveFileContentFts(relativePath, fileContent);
-          } catch (ftsErr) {
-            console.error(`Failed to index FTS content for ${relativePath}:`, ftsErr.message);
-          }
-
-          // Save symbols
-          for (const sym of symbols) {
-            this.db.saveSymbol(
-              relativePath,
-              sym.name,
-              sym.type,
-              sym.signature,
-              sym.startLine,
-              sym.endLine
-            );
-          }
-
-          rawImportsMap.set(relativePath, imports);
-        } catch (e) {
-          console.error(`Error parsing file ${relativePath}:`, e.message);
-          this.db.saveFile(relativePath, currentHash, 'service');
-        }
+        const imports = this._reindexFile(relativePath, currentHash);
+        rawImportsMap.set(relativePath, imports);
       } else {
         skippedCount++;
-        // If not parsed, we still need to load its dependencies for PageRank recalculation
-        // but we don't rewrite the symbols.
       }
     }
 
@@ -330,118 +296,13 @@ export class CodeIndexer {
     if (rawImportsMap.size > 0) {
       console.log('Resolving import dependencies...');
       for (const [relativePath, imports] of rawImportsMap.entries()) {
-        const absolutePath = path.resolve(this.rootDir, relativePath);
-        
-        for (const imp of imports) {
-          const resolved = this.resolveImportPath(absolutePath, imp.from);
-          if (!resolved) continue;
-
-          let targetRelativePath = '';
-          if (path.isAbsolute(resolved)) {
-            targetRelativePath = path.relative(this.rootDir, resolved);
-          } else {
-            // Fuzzy match for non-relative path
-            const possibleTargets = allFiles.filter(f => 
-              f.endsWith(resolved) || f.replace(/\.[^/.]+$/, '').endsWith(resolved)
-            );
-            if (possibleTargets.length > 0) {
-              targetRelativePath = path.relative(this.rootDir, possibleTargets[0]);
-            }
-          }
-
-          if (targetRelativePath && targetRelativePath !== relativePath) {
-            this.db.saveDependency(relativePath, targetRelativePath, imp.symbol);
-          }
-        }
+        this._resolveDependenciesForFile(relativePath, imports);
       }
     }
 
     // Recalculate PageRank
     console.log('Calculating PageRank scores...');
-    
-    // Fetch Git weights
-    let gitWeights = null;
-    try {
-      const output = execSync('git log --name-only --pretty=format: -n 1000', { cwd: this.rootDir, encoding: 'utf-8' });
-      gitWeights = {};
-      output.split('\n').forEach(line => {
-        const trimmed = line.trim().replace(/\\/g, '/');
-        if (trimmed) {
-          gitWeights[trimmed] = (gitWeights[trimmed] || 0) + 1;
-        }
-      });
-    } catch {
-      // Ignore if git command fails or git not initialized
-    }
-
-    // Auto-detect uncommitted/untracked files from Git to boost personalization (active working context)
-    let gitPersonalization = [];
-    try {
-      const statusOutput = execSync('git status --porcelain', { cwd: this.rootDir, encoding: 'utf-8' });
-      statusOutput.split('\n').forEach(line => {
-        const trimmed = line.trim();
-        if (!trimmed) return;
-        const spaceIndex = trimmed.search(/\s/);
-        if (spaceIndex !== -1) {
-          let filePathStr = trimmed.slice(spaceIndex + 1).trim();
-          if (filePathStr.startsWith('"') && filePathStr.endsWith('"')) {
-            filePathStr = filePathStr.slice(1, -1);
-          }
-          filePathStr = filePathStr.replace(/\\/g, '/');
-          gitPersonalization.push(filePathStr);
-        }
-      });
-    } catch {
-      // Ignore if git status fails
-    }
-
-    // Auto-detect files queried via MCP recently to boost personalization
-    let sessionPersonalization = [];
-    try {
-      if (typeof this.db.getRecentActiveFiles === 'function') {
-        sessionPersonalization = this.db.getRecentActiveFiles(24);
-      }
-    } catch {
-      // Ignore database errors
-    }
-
-    let combinedPersonalization = [];
-    if (personalization) {
-      combinedPersonalization = [...personalization];
-    }
-    combinedPersonalization = [...combinedPersonalization, ...gitPersonalization, ...sessionPersonalization];
-    combinedPersonalization = Array.from(new Set(combinedPersonalization)).filter(Boolean);
-
-    if (combinedPersonalization.length > 0) {
-      personalization = combinedPersonalization;
-    }
-
-    const files = this.db.getAllFiles();
-    const dependencies = this.db.db.prepare(`SELECT * FROM dependencies;`).all();
-    const ranks = calculatePageRank(files, dependencies, 20, 0.85, personalization, gitWeights);
-    this.db.updatePageRanks(ranks);
-
-    console.log('Calculating coupling and fragility metrics...');
-    const updatedFiles = this.db.getAllFiles();
-    const fanIn = {};
-    const fanOut = {};
-    updatedFiles.forEach(f => {
-      fanIn[f.path] = new Set();
-      fanOut[f.path] = new Set();
-    });
-
-    dependencies.forEach(d => {
-      if (fanIn[d.to_file]) fanIn[d.to_file].add(d.from_file);
-      if (fanOut[d.from_file]) fanOut[d.from_file].add(d.to_file);
-    });
-
-    for (const file of updatedFiles) {
-      const cIn = fanIn[file.path] ? fanIn[file.path].size : 0;
-      const cOut = fanOut[file.path] ? fanOut[file.path].size : 0;
-      const comp = file.complexity !== null && file.complexity !== undefined ? file.complexity : 1.0;
-      const frag = comp * (1.0 + cIn);
-      this.db.updateFileMetrics(file.path, comp, cIn, cOut, frag);
-    }
+    this._recalculateMetrics(personalization);
 
     console.log('Indexing completed successfully.');
   }
@@ -517,138 +378,24 @@ export class CodeIndexer {
       if (timeout) clearTimeout(timeout);
       timeout = setTimeout(() => {
         console.log(`\n[Watcher] Syncing index for ${changedFiles.size} files...`);
-        const allFiles = this.getFiles(this.rootDir);
 
         for (const relativePath of changedFiles) {
           const filePath = path.resolve(this.rootDir, relativePath);
           if (fs.existsSync(filePath)) {
             console.log(`[Watcher] Re-indexing: ${relativePath}`);
-            this.db.clearFileSymbolsAndDependencies(relativePath);
-            try {
-              const currentHash = this.getFileHash(filePath);
-              const { symbols, imports, summary, complexity } = parseFile(filePath);
-              const layer = determineLayer(relativePath, symbols);
-              this.db.saveFile(relativePath, currentHash, layer, summary, complexity);
-              
-              try {
-                const fileContent = fs.readFileSync(filePath, 'utf-8');
-                this.db.saveFileContentFts(relativePath, fileContent);
-              } catch (ftsErr) {
-                // ignore
-              }
-
-              for (const sym of symbols) {
-                this.db.saveSymbol(
-                  relativePath,
-                  sym.name,
-                  sym.type,
-                  sym.signature,
-                  sym.startLine,
-                  sym.endLine
-                );
-              }
-
-              // Resolve dependencies for this file
-              const absolutePath = path.resolve(this.rootDir, relativePath);
-              for (const imp of imports) {
-                const resolved = this.resolveImportPath(absolutePath, imp.from);
-                if (!resolved) continue;
-
-                let targetRelativePath = '';
-                if (path.isAbsolute(resolved)) {
-                  targetRelativePath = path.relative(this.rootDir, resolved);
-                } else {
-                  const possibleTargets = allFiles.filter(f => 
-                    f.endsWith(resolved) || f.replace(/\.[^/.]+$/, '').endsWith(resolved)
-                  );
-                  if (possibleTargets.length > 0) {
-                    targetRelativePath = path.relative(this.rootDir, possibleTargets[0]);
-                  }
-                }
-
-                if (targetRelativePath && targetRelativePath !== relativePath) {
-                  this.db.saveDependency(relativePath, targetRelativePath, imp.symbol);
-                }
-              }
-            } catch (e) {
-              console.error(`[Watcher] Error parsing ${relativePath}:`, e.message);
-            }
+            const imports = this._reindexFile(relativePath);
+            this._resolveDependenciesForFile(relativePath, imports);
           } else {
             console.log(`[Watcher] File removed: ${relativePath}`);
             this.db.deleteFile(relativePath);
           }
         }
 
-        // Recalculate PageRank
+        // Recalculate PageRank and metrics
         console.log('[Watcher] Recalculating PageRank scores...');
-        
-        let gitWeights = null;
-        try {
-          const output = execSync('git log --name-only --pretty=format: -n 1000', { cwd: this.rootDir, encoding: 'utf-8' });
-          gitWeights = {};
-          output.split('\n').forEach(line => {
-            const trimmed = line.trim().replace(/\\/g, '/');
-            if (trimmed) {
-              gitWeights[trimmed] = (gitWeights[trimmed] || 0) + 1;
-            }
-          });
-        } catch {}
+        this._recalculateMetrics();
 
-        let gitPersonalization = [];
-        try {
-          const statusOutput = execSync('git status --porcelain', { cwd: this.rootDir, encoding: 'utf-8' });
-          statusOutput.split('\n').forEach(line => {
-            const trimmed = line.trim();
-            if (!trimmed) return;
-            const spaceIndex = trimmed.search(/\s/);
-            if (spaceIndex !== -1) {
-              let filePathStr = trimmed.slice(spaceIndex + 1).trim();
-              if (filePathStr.startsWith('"') && filePathStr.endsWith('"')) {
-                filePathStr = filePathStr.slice(1, -1);
-              }
-              filePathStr = filePathStr.replace(/\\/g, '/');
-              gitPersonalization.push(filePathStr);
-            }
-          });
-        } catch {}
-
-        let sessionPersonalization = [];
-        try {
-          if (typeof this.db.getRecentActiveFiles === 'function') {
-            sessionPersonalization = this.db.getRecentActiveFiles(24);
-          }
-        } catch {}
-
-        const combinedPersonalization = Array.from(new Set([...gitPersonalization, ...sessionPersonalization])).filter(Boolean);
-
-        const files = this.db.getAllFiles();
-        const dependencies = this.db.db.prepare(`SELECT * FROM dependencies;`).all();
-        const ranks = calculatePageRank(files, dependencies, 20, 0.85, combinedPersonalization, gitWeights);
-        this.db.updatePageRanks(ranks);
-
-        // Update coupling and fragility
         console.log('[Watcher] Recalculating coupling metrics...');
-        const updatedFiles = this.db.getAllFiles();
-        const fanIn = {};
-        const fanOut = {};
-        updatedFiles.forEach(f => {
-          fanIn[f.path] = new Set();
-          fanOut[f.path] = new Set();
-        });
-
-        dependencies.forEach(d => {
-          if (fanIn[d.to_file]) fanIn[d.to_file].add(d.from_file);
-          if (fanOut[d.from_file]) fanOut[d.from_file].add(d.to_file);
-        });
-
-        for (const file of updatedFiles) {
-          const cIn = fanIn[file.path] ? fanIn[file.path].size : 0;
-          const cOut = fanOut[file.path] ? fanOut[file.path].size : 0;
-          const comp = file.complexity !== null && file.complexity !== undefined ? file.complexity : 1.0;
-          const frag = comp * (1.0 + cIn);
-          this.db.updateFileMetrics(file.path, comp, cIn, cOut, frag);
-        }
-
         console.log('[Watcher] Index sync completed.');
         changedFiles.clear();
         
@@ -678,6 +425,149 @@ export class CodeIndexer {
     });
 
     return watcher;
+  }
+
+  _reindexFile(relativePath, currentHash = null) {
+    const filePath = path.resolve(this.rootDir, relativePath);
+    this.db.clearFileSymbolsAndDependencies(relativePath);
+    try {
+      const hash = currentHash || this.getFileHash(filePath);
+      const { symbols, imports, summary, complexity } = parseFile(filePath);
+      const layer = determineLayer(relativePath, symbols);
+      this.db.saveFile(relativePath, hash, layer, summary, complexity);
+      
+      try {
+        const fileContent = fs.readFileSync(filePath, 'utf-8');
+        this.db.saveFileContentFts(relativePath, fileContent);
+      } catch (ftsErr) {
+        // ignore
+      }
+
+      for (const sym of symbols) {
+        this.db.saveSymbol(
+          relativePath,
+          sym.name,
+          sym.type,
+          sym.signature,
+          sym.startLine,
+          sym.endLine
+        );
+      }
+
+      return imports;
+    } catch (e) {
+      console.error(`Error parsing file ${relativePath}:`, e.message);
+      const hash = currentHash || this.getFileHash(filePath);
+      this.db.saveFile(relativePath, hash, 'service');
+      return [];
+    }
+  }
+
+  _resolveDependenciesForFile(relativePath, imports) {
+    const absolutePath = path.resolve(this.rootDir, relativePath);
+    const dbFiles = this.db.getAllFiles();
+
+    for (const imp of imports) {
+      const resolved = this.resolveImportPath(absolutePath, imp.from);
+      if (!resolved) continue;
+
+      let targetRelativePath = '';
+      if (path.isAbsolute(resolved)) {
+        targetRelativePath = path.relative(this.rootDir, resolved);
+      } else {
+        const possibleTargets = dbFiles.filter(f => 
+          f.path.endsWith(resolved) || f.path.replace(/\.[^/.]+$/, '').endsWith(resolved)
+        );
+        if (possibleTargets.length > 0) {
+          targetRelativePath = possibleTargets[0].path;
+        }
+      }
+
+      if (targetRelativePath && targetRelativePath !== relativePath) {
+        this.db.saveDependency(relativePath, targetRelativePath, imp.symbol);
+      }
+    }
+  }
+
+  _recalculateMetrics(personalization = null) {
+    // Fetch Git weights
+    let gitWeights = null;
+    try {
+      const output = execSync('git log --name-only --pretty=format: -n 1000', { cwd: this.rootDir, encoding: 'utf-8' });
+      gitWeights = {};
+      output.split('\n').forEach(line => {
+        const trimmed = line.trim().replace(/\\/g, '/');
+        if (trimmed) {
+          gitWeights[trimmed] = (gitWeights[trimmed] || 0) + 1;
+        }
+      });
+    } catch {
+      // Ignore if git command fails or git not initialized
+    }
+
+    // Auto-detect uncommitted/untracked files from Git to boost personalization (active working context)
+    let gitPersonalization = [];
+    try {
+      const statusOutput = execSync('git status --porcelain', { cwd: this.rootDir, encoding: 'utf-8' });
+      statusOutput.split('\n').forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        const spaceIndex = trimmed.search(/\s/);
+        if (spaceIndex !== -1) {
+          let filePathStr = trimmed.slice(spaceIndex + 1).trim();
+          if (filePathStr.startsWith('"') && filePathStr.endsWith('"')) {
+            filePathStr = filePathStr.slice(1, -1);
+          }
+          filePathStr = filePathStr.replace(/\\/g, '/');
+          gitPersonalization.push(filePathStr);
+        }
+      });
+    } catch {
+      // Ignore if git status fails
+    }
+
+    // Auto-detect files queried via MCP recently to boost personalization
+    let sessionPersonalization = [];
+    try {
+      if (typeof this.db.getRecentActiveFiles === 'function') {
+        sessionPersonalization = this.db.getRecentActiveFiles(24);
+      }
+    } catch {
+      // Ignore database errors
+    }
+
+    let combinedPersonalization = [];
+    if (personalization) {
+      combinedPersonalization = [...personalization];
+    }
+    combinedPersonalization = [...combinedPersonalization, ...gitPersonalization, ...sessionPersonalization];
+    combinedPersonalization = Array.from(new Set(combinedPersonalization)).filter(Boolean);
+
+    const files = this.db.getAllFiles();
+    const dependencies = this.db.db.prepare(`SELECT * FROM dependencies;`).all();
+    const ranks = calculatePageRank(files, dependencies, 20, 0.85, combinedPersonalization.length > 0 ? combinedPersonalization : null, gitWeights);
+    this.db.updatePageRanks(ranks);
+
+    const updatedFiles = this.db.getAllFiles();
+    const fanIn = {};
+    const fanOut = {};
+    updatedFiles.forEach(f => {
+      fanIn[f.path] = new Set();
+      fanOut[f.path] = new Set();
+    });
+
+    dependencies.forEach(d => {
+      if (fanIn[d.to_file]) fanIn[d.to_file].add(d.from_file);
+      if (fanOut[d.from_file]) fanOut[d.from_file].add(d.to_file);
+    });
+
+    for (const file of updatedFiles) {
+      const cIn = fanIn[file.path] ? fanIn[file.path].size : 0;
+      const cOut = fanOut[file.path] ? fanOut[file.path].size : 0;
+      const comp = file.complexity !== null && file.complexity !== undefined ? file.complexity : 1.0;
+      const frag = comp * (1.0 + cIn);
+      this.db.updateFileMetrics(file.path, comp, cIn, cOut, frag);
+    }
   }
 }
 
