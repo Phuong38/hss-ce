@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { parse as babelParse } from '@babel/parser';
 import { execFileSync } from 'node:child_process';
 
+
 function getLineNumber(content, index) {
   return content.slice(0, index).split('\n').length;
 }
