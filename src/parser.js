@@ -17,7 +17,7 @@ function extractSummary(content, ext) {
       const doc = (match[1] || match[2] || '').trim();
       return doc.split('\n')[0].trim();
     }
-  } else if (ext === '.js' || ext === '.ts' || ext === '.jsx' || ext === '.tsx') {
+  } else if (ext === '.js' || ext === '.ts' || ext === '.jsx' || ext === '.tsx' || ext === '.go' || ext === '.rs') {
     // Match JSDoc or block comment at the top of javascript file
     const match = trimmed.match(/^\/\*\*?([\s\S]*?)\*\//);
     if (match) {
@@ -71,6 +71,10 @@ export function parseFile(filePath) {
     } else {
       parsePython(content, symbols, imports);
     }
+  } else if (ext === '.go') {
+    parseGo(content, symbols, imports);
+  } else if (ext === '.rs') {
+    parseRust(content, symbols, imports);
   }
 
 
@@ -507,6 +511,151 @@ function parsePython(content, symbols, imports) {
   }
 }
 
+function parseGo(content, symbols, imports) {
+  let match;
+  
+  // 1. Go Imports
+  const goMultiImportRegex = /import\s*\(\s*([\s\S]*?)\s*\)/g;
+  while ((match = goMultiImportRegex.exec(content)) !== null) {
+    const blockContent = match[1];
+    const lines = blockContent.split('\n');
+    for (const line of lines) {
+      const clean = line.replace(/\/\/.*$/, '').trim();
+      if (!clean) continue;
+      const m = clean.match(/^(?:(\w+)\s+)?`([^`]+)`|^(?:(\w+)\s+)?"([^"]+)"/);
+      if (m) {
+        const alias = m[1] || m[3];
+        const fromPath = m[2] || m[4];
+        const symbol = alias || path.basename(fromPath);
+        imports.push({ symbol, from: fromPath });
+      }
+    }
+  }
+  
+  const goSingleImportRegex = /import\s+(?:(\w+)\s+)?(?:"([^"]+)"|`([^`]+)`)/g;
+  while ((match = goSingleImportRegex.exec(content)) !== null) {
+    const alias = match[1];
+    const fromPath = match[2] || match[3];
+    const symbol = alias || path.basename(fromPath);
+    imports.push({ symbol, from: fromPath });
+  }
+
+  // 2. Go Functions
+  const goFuncRegex = /func\s+(?:\([^)]+\)\s+)?(\w+)\s*\(([^)]*)\)(?:\s*([^{;\n]+))?/g;
+  while ((match = goFuncRegex.exec(content)) !== null) {
+    const name = match[1];
+    const params = match[2] || '';
+    const returnType = match[3] && match[3].trim() ? ` ${match[3].trim()}` : '';
+    const line = getLineNumber(content, match.index);
+    symbols.push({
+      name,
+      type: 'function',
+      signature: `func ${name}(${params.replace(/\s+/g, ' ')})${returnType}`,
+      startLine: line,
+      endLine: line
+    });
+  }
+
+  // 3. Go Structs
+  const goStructRegex = /type\s+(\w+)\s+struct\b/g;
+  while ((match = goStructRegex.exec(content)) !== null) {
+    const name = match[1];
+    const line = getLineNumber(content, match.index);
+    symbols.push({
+      name,
+      type: 'struct',
+      signature: `type ${name} struct`,
+      startLine: line,
+      endLine: line
+    });
+  }
+
+  // 4. Go Interfaces
+  const goInterfaceRegex = /type\s+(\w+)\s+interface\b/g;
+  while ((match = goInterfaceRegex.exec(content)) !== null) {
+    const name = match[1];
+    const line = getLineNumber(content, match.index);
+    symbols.push({
+      name,
+      type: 'interface',
+      signature: `type ${name} interface`,
+      startLine: line,
+      endLine: line
+    });
+  }
+}
+
+function parseRust(content, symbols, imports) {
+  let match;
+
+  // 1. Rust Imports
+  const rustUseRegex = /^(?:pub\s+)?use\s+([^;]+);/gm;
+  while ((match = rustUseRegex.exec(content)) !== null) {
+    const rawPath = match[1].trim();
+    const braceMatch = rawPath.match(/([\w:]+)::\{([^}]+)\}/);
+    if (braceMatch) {
+      const prefix = braceMatch[1];
+      const items = braceMatch[2].split(',');
+      for (const item of items) {
+        const cleanItem = item.trim();
+        if (!cleanItem) continue;
+        const parts = cleanItem.split(/\s+as\s+/);
+        const symbol = parts[parts.length - 1].trim();
+        imports.push({ symbol, from: `${prefix}::${symbol}` });
+      }
+    } else {
+      const parts = rawPath.split(/\s+as\s+/);
+      const alias = parts[parts.length - 1].trim().split('::').pop();
+      const fromPath = parts[0].trim();
+      imports.push({ symbol: alias, from: fromPath });
+    }
+  }
+
+  // 2. Rust Functions
+  const rustFuncRegex = /(?:pub\s+)?(?:async\s+)?fn\s+(\w+)\s*(<[^>]+>)?\s*\(([^)]*)\)(?:\s*->\s*([^{;\n]+))?/g;
+  while ((match = rustFuncRegex.exec(content)) !== null) {
+    const name = match[1];
+    const params = match[3] || '';
+    const returnType = match[4] && match[4].trim() ? ` -> ${match[4].trim()}` : '';
+    const line = getLineNumber(content, match.index);
+    symbols.push({
+      name,
+      type: 'function',
+      signature: `fn ${name}(${params.replace(/\s+/g, ' ')})${returnType}`,
+      startLine: line,
+      endLine: line
+    });
+  }
+
+  // 3. Rust Structs
+  const rustStructRegex = /(?:pub\s+)?struct\s+(\w+)/g;
+  while ((match = rustStructRegex.exec(content)) !== null) {
+    const name = match[1];
+    const line = getLineNumber(content, match.index);
+    symbols.push({
+      name,
+      type: 'struct',
+      signature: `struct ${name}`,
+      startLine: line,
+      endLine: line
+    });
+  }
+
+  // 4. Rust Traits
+  const rustTraitRegex = /(?:pub\s+)?trait\s+(\w+)/g;
+  while ((match = rustTraitRegex.exec(content)) !== null) {
+    const name = match[1];
+    const line = getLineNumber(content, match.index);
+    symbols.push({
+      name,
+      type: 'trait',
+      signature: `trait ${name}`,
+      startLine: line,
+      endLine: line
+    });
+  }
+}
+
 export function determineLayer(filePath, symbols = []) {
   const normPath = filePath.toLowerCase().replace(/\\/g, '/');
   const baseName = path.basename(normPath);
@@ -536,6 +685,9 @@ export function determineLayer(filePath, symbols = []) {
     baseName === 'app.ts' || 
     baseName === 'server.js' || 
     baseName === 'server.ts' || 
+    baseName === 'main.go' ||
+    baseName === 'main.rs' ||
+    baseName === 'lib.rs' ||
     normPath.includes('/routes/') ||
     normPath.includes('/controllers/') ||
     normPath.includes('/api/') ||
@@ -569,7 +721,7 @@ export function determineLayer(filePath, symbols = []) {
 
 
 export function stripComments(content, ext) {
-  if (['.js', '.ts', '.jsx', '.tsx'].includes(ext)) {
+  if (['.js', '.ts', '.jsx', '.tsx', '.go', '.rs'].includes(ext)) {
     let stripped = content.replace(/\/\*[\s\S]*?\*\//g, '');
     stripped = stripped.replace(/(^|[^\:]|^\:[^\/])\/\/.*$/gm, '$1');
     stripped = stripped.split('\n')
@@ -593,8 +745,10 @@ export function stripComments(content, ext) {
 export function generateSkeletonContent(content, ext, symbols = [], summary = null) {
   const isJs = ['.js', '.ts', '.jsx', '.tsx'].includes(ext);
   const isPy = ext === '.py';
+  const isGo = ext === '.go';
+  const isRs = ext === '.rs';
 
-  if (!isJs && !isPy) {
+  if (!isJs && !isPy && !isGo && !isRs) {
     return content;
   }
 
@@ -602,7 +756,7 @@ export function generateSkeletonContent(content, ext, symbols = [], summary = nu
 
   // 1. Summary / Docstring
   if (summary) {
-    if (isJs) {
+    if (isJs || isGo || isRs) {
       lines.push(`/**\n * ${summary}\n */\n`);
     } else if (isPy) {
       lines.push(`"""\n${summary}\n"""\n`);
@@ -631,6 +785,18 @@ export function generateSkeletonContent(content, ext, symbols = [], summary = nu
     while ((match = pyImportRegex.exec(content)) !== null) {
       importLines.push(match[0]);
     }
+  } else if (isGo) {
+    const goImportRegex = /import\s+(?:"[^"]+"|\([\s\S]*?\))/g;
+    let match;
+    while ((match = goImportRegex.exec(content)) !== null) {
+      importLines.push(match[0]);
+    }
+  } else if (isRs) {
+    const rsUseRegex = /^(?:pub\s+)?use\s+[^;]+;/gm;
+    let match;
+    while ((match = rsUseRegex.exec(content)) !== null) {
+      importLines.push(match[0]);
+    }
   }
 
   if (importLines.length > 0) {
@@ -650,6 +816,14 @@ export function generateSkeletonContent(content, ext, symbols = [], summary = nu
         if (!sig.endsWith(':')) sig += ':';
         lines.push(`${sig} ...`);
       }
+    } else if (sym.type === 'struct') {
+      if (isGo) {
+        lines.push(`${sym.signature || `type ${sym.name} struct`} { /* struct fields elided */ }`);
+      } else if (isRs) {
+        lines.push(`${sym.signature || `struct ${sym.name}`} { /* struct fields elided */ }`);
+      }
+    } else if (sym.type === 'trait') {
+      lines.push(`${sym.signature || `trait ${sym.name}`} { /* trait methods elided */ }`);
     } else if (sym.type === 'function') {
       if (isJs) {
         let sig = sym.signature || `function ${sym.name}()`;
@@ -667,15 +841,19 @@ export function generateSkeletonContent(content, ext, symbols = [], summary = nu
         let sig = sym.signature || `def ${sym.name}()`;
         if (!sig.endsWith(':')) sig += ':';
         lines.push(`${sig} ...`);
+      } else if (isGo) {
+        lines.push(`${sym.signature || `func ${sym.name}()`} { /* body elided */ }`);
+      } else if (isRs) {
+        lines.push(`${sym.signature || `fn ${sym.name}()`} { /* body elided */ }`);
       }
     } else if (sym.type === 'interface') {
       lines.push(`${sym.signature || `interface ${sym.name}`} { /* interface body elided */ }`);
     } else if (sym.type === 'type') {
       lines.push(`${sym.signature || `type ${sym.name}`} = any; /* type body elided */`);
     } else if (sym.type === 'route') {
-      if (isJs) {
+      if (isJs || isGo) {
         lines.push(`// Route: ${sym.signature || sym.name}`);
-      } else if (isPy) {
+      } else if (isPy || isRs) {
         lines.push(`# Route: ${sym.signature || sym.name}`);
       }
     }
