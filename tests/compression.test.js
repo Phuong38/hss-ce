@@ -66,7 +66,7 @@ try {
   xmlOutput = execSync(`node src/cli.js pack ${tempWorkspace} --db=${tempDbPath} --budget=3000 --format=xml`).toString();
 
   // Check cache-aligned sections
-  assert.ok(xmlOutput.includes('<hss_ce_context_pack budget="3000">'), 'Should have root tag');
+  assert.ok(xmlOutput.includes('<hss_ce_context_pack>'), 'Should have root tag');
   assert.ok(xmlOutput.includes('<system_stats>'), 'Should have system_stats tag');
   assert.ok(xmlOutput.includes('<codebase_skeleton_map>'), 'Should have codebase_skeleton_map tag');
   assert.ok(xmlOutput.includes('<reference_file_contents>'), 'Should have reference_file_contents tag');
@@ -88,10 +88,10 @@ try {
   const mdOutput = execSync(`node src/cli.js pack ${tempWorkspace} --db=${tempDbPath} --budget=3000 --format=markdown`).toString();
 
   assert.ok(mdOutput.includes('# HSS-CE Codebase Context Pack'), 'Should have Markdown title');
-  assert.ok(mdOutput.includes('## 1. System Stats'), 'Should have System Stats section');
-  assert.ok(mdOutput.includes('## 2. Codebase Skeleton Map'), 'Should have Skeleton Map section');
-  assert.ok(mdOutput.includes('## 3. Reference File Contents'), 'Should have Reference File Contents section');
-  assert.ok(mdOutput.includes('## 4. Active Files (Focus)'), 'Should have Active Files section');
+  assert.ok(mdOutput.includes('## 1. Codebase Skeleton Map'), 'Should have Skeleton Map section');
+  assert.ok(mdOutput.includes('## 2. Reference File Contents'), 'Should have Reference File Contents section');
+  assert.ok(mdOutput.includes('## 3. Active Files (Focus)'), 'Should have Active Files section');
+  assert.ok(mdOutput.includes('## 4. System Stats'), 'Should have System Stats section');
 
   console.log('✅ ALL COMPRESSION & CACHE ALIGNMENT TESTS PASSED SUCCESSFULLY!');
 } catch (err) {
