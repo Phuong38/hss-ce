@@ -386,4 +386,18 @@ export class CodeDatabase {
       impactedFiles
     };
   }
+
+  getSessionActions(limit = 50) {
+    const stmt = this.db.prepare(`
+      SELECT id, action_type, file_path, symbol, timestamp 
+      FROM session_actions 
+      ORDER BY timestamp DESC 
+      LIMIT ?;
+    `);
+    return stmt.all(limit);
+  }
+
+  clearSessionActions() {
+    this.db.exec('DELETE FROM session_actions;');
+  }
 }

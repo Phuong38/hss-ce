@@ -499,6 +499,58 @@
     .notif-banner.active {
       transform: translateY(0);
     }
+
+    /* Audit Log Timeline Styles */
+    .timeline-item {
+      position: relative;
+      padding-left: 1.5rem;
+      border-left: 2px solid var(--border-color);
+      padding-bottom: 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      transition: all 0.2s ease;
+    }
+    .timeline-item:last-child {
+      border-left: 2px solid transparent;
+      padding-bottom: 0;
+    }
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -6px;
+      top: 5px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      border: 2px solid var(--bg-dark);
+      transition: all 0.2s ease;
+    }
+    .timeline-item.active-action::before {
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+    .timeline-time {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .timeline-type {
+      font-weight: 600;
+      font-size: 0.8rem;
+      color: var(--accent);
+    }
+    .timeline-meta {
+      font-size: 0.75rem;
+      color: #cbd5e1;
+      font-family: var(--font-mono);
+      word-break: break-all;
+      background: rgba(255, 255, 255, 0.02);
+      padding: 0.45rem;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+    }
   </style>
 </head>
 <body>
@@ -558,6 +610,7 @@
       <div class="tab-nav">
         <div class="tab-btn active" id="tab-details-btn" onclick="switchTab('details')">Details</div>
         <div class="tab-btn" id="tab-code-btn" onclick="switchTab('code')">Source Code</div>
+        <div class="tab-btn" id="tab-actions-btn" onclick="switchTab('actions')">Audit Log</div>
       </div>
       
       <div class="scrollable" style="flex: 1; padding: 0;">
@@ -570,7 +623,7 @@
             <div class="detail-heading" id="detail-filename">file.js</div>
             
             <div style="margin: 0.5rem 0 1rem 0;">
-              <span class="layer-badge" id="detail-layer">service</span>
+               <span class="layer-badge" id="detail-layer">service</span>
             </div>
 
             <div class="metrics-grid">
@@ -608,6 +661,17 @@
               <span id="code-lang">text</span>
             </div>
             <pre><code class="language-javascript" id="code-box">Select a file to view code.</code></pre>
+          </div>
+        </div>
+
+        <!-- Audit Log Tab Content -->
+        <div class="tab-content" id="tab-actions" style="padding: 1rem;">
+          <div class="detail-heading" style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+            <span>Agent Activity Audit Log</span>
+            <button class="btn-action" style="font-size: 0.65rem; padding: 0.2rem 0.5rem;" onclick="clearActions()">Clear Logs</button>
+          </div>
+          <div class="timeline-container" id="timeline-box" style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.75rem;">
+            <!-- Timeline elements will be rendered here -->
           </div>
         </div>
       </div>
@@ -1239,11 +1303,75 @@
       if (tab === 'details') {
         document.getElementById('tab-details-btn').classList.add('active');
         document.getElementById('tab-details').classList.add('active');
-      } else {
+      } else if (tab === 'code') {
         document.getElementById('tab-code-btn').classList.add('active');
         document.getElementById('tab-code').classList.add('active');
+      } else if (tab === 'actions') {
+        document.getElementById('tab-actions-btn').classList.add('active');
+        document.getElementById('tab-actions').classList.add('active');
+        loadActions();
       }
     }
+
+    async function loadActions() {
+      try {
+        const res = await fetch('/api/actions?limit=50');
+        const actions = await res.json();
+        const box = document.getElementById('timeline-box');
+        box.innerHTML = '';
+
+        if (actions.length === 0) {
+          box.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">No activity logged in this session yet.</div>';
+          return;
+        }
+
+        actions.forEach((act, idx) => {
+          const item = document.createElement('div');
+          item.className = 'timeline-item';
+          if (idx === 0) item.classList.add('active-action');
+
+          const timeStr = new Date(act.timestamp).toLocaleTimeString();
+          
+          let metaHtml = '';
+          if (act.file_path || act.symbol) {
+            let metaText = '';
+            if (act.file_path && act.symbol) {
+              metaText = `${act.file_path} @ ${act.symbol}`;
+            } else {
+              metaText = act.file_path || act.symbol;
+            }
+            metaHtml = `<div class="timeline-meta">${metaText}</div>`;
+          }
+
+          item.innerHTML = `
+            <div class="timeline-time">${timeStr}</div>
+            <div class="timeline-type">${act.action_type}</div>
+            ${metaHtml}
+          `;
+          box.appendChild(item);
+        });
+      } catch (err) {
+        console.error('Failed to load session actions:', err);
+      }
+    }
+
+    async function clearActions() {
+      if (!confirm('Are you sure you want to clear all session logs?')) return;
+      try {
+        await fetch('/api/clear-actions', { method: 'POST' });
+        loadActions();
+      } catch (err) {
+        alert('Failed to clear logs: ' + err.message);
+      }
+    }
+
+    // Auto-refresh timeline if active
+    setInterval(() => {
+      const actionsTab = document.getElementById('tab-actions');
+      if (actionsTab && actionsTab.classList.contains('active')) {
+        loadActions();
+      }
+    }, 3000);
 
     function changeSort(sort) {
       currentSort = sort;

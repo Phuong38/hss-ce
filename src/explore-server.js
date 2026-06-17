@@ -109,7 +109,25 @@ export function runExploreServer(dbPath, rootDir, port = 3000) {
         return;
       }
 
-      // 4. API: Reindex Workspace
+      // 4. API: Get Session Actions
+      if (pathname === '/api/actions') {
+        const limit = parseInt(parsedUrl.searchParams.get('limit') || '50', 10);
+        const actions = db.getSessionActions(limit);
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(actions));
+        return;
+      }
+
+      // 5. API: Clear Session Actions
+      if (pathname === '/api/clear-actions' && req.method === 'POST') {
+        db.clearSessionActions();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+        return;
+      }
+
+      // 6. API: Reindex Workspace
       if (pathname === '/api/reindex' && req.method === 'POST') {
         console.log('Triggering background re-indexing via dashboard...');
         const indexer = new CodeIndexer(db, rootDir);

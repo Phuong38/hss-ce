@@ -24,6 +24,7 @@ HSS-CE is **not** a magical AI assistant that writes code for you. It is a struc
 * **Cache-Aligned Context Packing:** Re-orders context packs to place stable components (skeleton maps, system stats) at the beginning of the prompt and dynamic content (active files) at the very end. This maximizes LLM provider KV caching hits, saving up to 50%+ on prompt cost and latency.
 * **Smart JSON Compaction:** Automatically minifies and compacts configuration files (like `package.json` devDependencies) to strip noise and reduce token consumption.
 * **Lazy Content Retrieval (CCR):** Exposes a `read_file_content` MCP tool so agents can receive lightweight codebase skeletons first and load full contents dynamically on-demand, enabling lossless token efficiency.
+* **Transparent Agent Session Logging & Audit Log:** Automatically records all MCP server interactions (context packing, symbol definition queries, text searches) to a local SQLite database. Exposes a `get_session_actions` tool for AI agents and an `/api/actions` endpoint for the dashboard, rendering a real-time scrolling vertical timeline of all agent operations under the "Audit Log" tab.
 
 ### 3. Current Limitations & What It is Not
 * **Hybrid AST-Regex Parsing Engine:** HSS-CE uses high-performance syntax parsers (Babel for JS/TS, Python AST module for Python) to resolve symbols, imports, and metadata accurately, alongside dedicated language-specific parsers for **Go** (functions, structs, interfaces, imports) and **Rust** (functions, structs, traits, imports). For other unsupported languages, it falls back to lightweight regex-based heuristic parsing. This balances parser speed, accuracy, and extensibility.
@@ -50,7 +51,8 @@ When you ask your agent (e.g. Claude Code or Cursor): *"Find all callers of the 
 5. Agent invokes `search_code(query: "TODO: fix", isRegex: false)` → HSS-CE performs a lightning-fast SQLite FTS5 index search, ranking results by BM25 relevance and PageRank structural importance.
 6. Agent invokes `check_index_drift()` → HSS-CE returns drift status to verify if index matches files on disk.
 7. Agent invokes `get_change_impact(target: "src/db.js", depth: 3)` → HSS-CE recursively traces upstream imports to assess blast radius before modifying any code.
-8. The agent reads only those specific files, completing the task with 90% fewer tokens and much higher accuracy.
+8. Agent invokes `get_session_actions(limit: 50)` → HSS-CE returns the historical log of tool invocations performed in this session.
+9. The agent reads only those specific files, completing the task with 90% fewer tokens and much higher accuracy.
 
 ---
 

@@ -326,6 +326,20 @@ export async function runMcpServer(dbPath, rootDir) {
             },
             required: ['target']
           }
+        },
+        {
+          name: 'get_session_actions',
+          description: 'Retrieve recent agent activity session logs from SQLite.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              limit: {
+                type: 'integer',
+                description: 'Maximum number of session actions to return (default 50)',
+                default: 50
+              }
+            }
+          }
         }
       ]
     };
@@ -337,6 +351,7 @@ export async function runMcpServer(dbPath, rootDir) {
     try {
       switch (name) {
         case 'get_skeleton': {
+          try { db.logSessionAction('get_skeleton', null, null); } catch {}
           const limit = args?.limit || 30;
           const skeleton = db.getSkeletonMap();
           const sliced = skeleton.slice(0, limit);
@@ -375,6 +390,7 @@ export async function runMcpServer(dbPath, rootDir) {
 
         case 'get_callers': {
           const symName = args?.symbolName;
+          try { db.logSessionAction('get_callers', null, symName); } catch {}
           const results = db.getCallers(symName);
           
           return {
@@ -390,6 +406,7 @@ export async function runMcpServer(dbPath, rootDir) {
         }
 
         case 'get_routes': {
+          try { db.logSessionAction('get_routes', null, null); } catch {}
           const allSymbols = db.db.prepare(`
             SELECT file_path, name, signature, start_line 
             FROM symbols 
@@ -409,6 +426,7 @@ export async function runMcpServer(dbPath, rootDir) {
         }
 
         case 'incremental_reindex': {
+          try { db.logSessionAction('incremental_reindex', null, null); } catch {}
           const indexer = new CodeIndexer(db, rootDir);
           indexer.index();
           return {
@@ -422,6 +440,7 @@ export async function runMcpServer(dbPath, rootDir) {
         }
 
         case 'get_mermaid_graph': {
+          try { db.logSessionAction('get_mermaid_graph', null, null); } catch {}
           const deps = db.db.prepare(`SELECT from_file, to_file, symbol FROM dependencies;`).all();
           const makeSafeId = (p) => p.replace(/[^a-zA-Z0-9]/g, '_');
           let mermaid = "graph TD\n";
@@ -451,6 +470,7 @@ export async function runMcpServer(dbPath, rootDir) {
         }
 
         case 'get_compact_map': {
+          try { db.logSessionAction('get_compact_map', null, null); } catch {}
           const activeFiles = args?.activeFiles || null;
           if (activeFiles && activeFiles.length > 0) {
             const indexer = new CodeIndexer(db, rootDir);
@@ -498,6 +518,7 @@ export async function runMcpServer(dbPath, rootDir) {
         }
 
         case 'pack_context': {
+          try { db.logSessionAction('pack_context', null, null); } catch {}
           const activeFiles = args?.activeFiles || null;
           const noComments = args?.noComments || false;
           const format = args?.format || 'xml';
@@ -712,6 +733,7 @@ export async function runMcpServer(dbPath, rootDir) {
         }
 
         case 'get_onboarding_tour': {
+          try { db.logSessionAction('get_onboarding_tour', null, null); } catch {}
           const map = db.getSkeletonMap();
           
           let tour = '# HSS-CE Codebase Onboarding Tour\n\n';
@@ -975,6 +997,7 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
           if (!query) {
             throw new Error('Query parameter is required');
           }
+          try { db.logSessionAction('search_symbols', null, query); } catch {}
           const results = db.searchSymbols(query);
           return {
             content: [
@@ -994,6 +1017,7 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
           if (!query) {
             throw new Error('Query parameter is required');
           }
+          try { db.logSessionAction('search_code', null, query); } catch {}
 
           const results = [];
           
@@ -1079,6 +1103,7 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
 
           const relFrom = getRelativePath(fromFile);
           const relTo = getRelativePath(toFile);
+          try { db.logSessionAction('get_dependency_path', `${relFrom} -> ${relTo}`, null); } catch {}
 
           const pathResult = db.getDependencyPath(relFrom, relTo);
 
@@ -1120,6 +1145,7 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
 
           const relPath = getRelativePath(filePath);
           const absPath = path.resolve(rootDir, relPath);
+          try { db.logSessionAction('read_file_content', relPath, null); } catch {}
 
           if (!fs.existsSync(absPath)) {
             throw new Error(`File not found: ${relPath}`);
@@ -1144,6 +1170,7 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
         }
 
         case 'check_index_drift': {
+          try { db.logSessionAction('check_index_drift', null, null); } catch {}
           const indexer = new CodeIndexer(db, rootDir);
           const drift = indexer.checkDrift();
           return {
@@ -1167,6 +1194,7 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
           if (fs.existsSync(path.resolve(rootDir, target))) {
             normalizedArg = path.relative(rootDir, path.resolve(rootDir, target));
           }
+          try { db.logSessionAction('get_change_impact', normalizedArg, null); } catch {}
           
           const impact = db.getChangeImpact(normalizedArg, depth);
           return {
@@ -1174,6 +1202,19 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
               {
                 type: 'text',
                 text: JSON.stringify(impact, null, 2)
+              }
+            ]
+          };
+        }
+
+        case 'get_session_actions': {
+          const limit = args?.limit || 50;
+          const actions = db.getSessionActions(limit);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(actions, null, 2)
               }
             ]
           };
