@@ -21,7 +21,7 @@ HSS-CE is **not** a magical AI assistant that writes code for you. It is a struc
 * **Precise Symbol Navigation:** Instead of performing noisy text searches (like raw `grep` or `ripgrep`), agents use structured database queries to resolve exact function definitions and caller locations.
 * **Automated Redaction (Secret Guard):** Before packing codebase files to send to LLM context, HSS-CE automatically redacts credentials, private keys, and API tokens, preventing security leaks.
 * **Git-Aware Ignore System:** Automatically respects `.gitignore` rules in addition to local `.hssceignore` patterns, ensuring build artifacts, dependencies, and temporary files are excluded from the index.
-* **Cache-Aligned Context Packing:** Re-orders context packs to place stable components (skeleton maps, system stats) at the beginning of the prompt and dynamic content (active files) at the very end. This maximizes LLM provider KV caching hits, saving up to 50%+ on prompt cost and latency.
+* **Cache-Aligned Context Packing:** Re-orders context packs to place stable components (static headers, path-sorted skeleton maps, reference files) at the beginning of the prompt, and highly dynamic variables (like system stats and token budget) at the very end. This maximizes LLM provider KV caching hits, saving up to 50%+ on prompt cost and latency.
 * **Smart JSON Compaction:** Automatically minifies and compacts configuration files (like `package.json` devDependencies) to strip noise and reduce token consumption.
 * **Lazy Content Retrieval (CCR):** Exposes a `read_file_content` MCP tool so agents can receive lightweight codebase skeletons first and load full contents dynamically on-demand, enabling lossless token efficiency.
 
@@ -149,8 +149,8 @@ As of mid-2026, the AI agent ecosystem has evolved significantly. Below is a com
     *   *Goal:* Integrate AST/specialized parsers (Node.js Babel for JS/TS, python3 `ast` module for Python, regex-based parsers for Go & Rust) to resolve signatures, imports, structs, interfaces, and traits.
     *   *Testing:* Verified with `tests/python_ast.test.js`, `tests/go_rust.test.js`, and existing tests.
 
-*   **Phase 2: KV-Cache prefix alignment**
-    *   *Goal:* Implement deterministic prompt formatting to lock stable context chunks (e.g. system instructions, skeleton structures) at the beginning of prompt outputs.
+*   **Phase 2: KV-Cache prefix alignment (Completed)**
+    *   *Goal:* Implement deterministic prompt formatting to lock stable context chunks (e.g. static headers, skeleton structures, and reference files sorted by path) at the beginning of prompt outputs, while moving highly dynamic variables (like total/active file counts and budget) to the footer.
 *   **Phase 3: Real-Time Sync Watcher (Completed)**
     *   *Goal:* Add a local file watcher using `chokidar` to automatically sync SQLite `.hss-ce/graph.db` on file change events.
 

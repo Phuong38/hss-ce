@@ -243,7 +243,7 @@ const noComments = args.includes('--no-comments');
 const progressive = args.includes('--progressive');
 
 const sortFlag = args.find(a => a.startsWith('--sort='));
-const sortOption = sortFlag ? sortFlag.split('=')[1] : 'pagerank';
+const sortOption = sortFlag ? sortFlag.split('=')[1] : 'path';
 
 const budgetFlag = args.find(a => a.startsWith('--budget='));
 const tokenBudget = budgetFlag ? parseInt(budgetFlag.split('=')[1], 10) : 1000;
@@ -1122,6 +1122,8 @@ node src/cli.js mcp .
 
       if (sortOption === 'path') {
         map.sort((a, b) => a.path.localeCompare(b.path));
+      } else {
+        map.sort((a, b) => b.pagerank - a.pagerank);
       }
 
       // 1. Build codebase skeleton map section
@@ -1158,9 +1160,9 @@ node src/cli.js mcp .
           if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
           if (extName === 'ts' || extName === 'js') extName = 'javascript';
           if (extName === 'py') extName = 'python';
-          skelBlock = `### File: ${file.path} (Skeleton)\n\`\`\`${extName}\n${skelBlockContent}\n\`\`\`\n\n`;
+          skelBlock = `### File: ${file.path} (Skeleton) [PageRank: ${file.pagerank.toFixed(3)}, Layer: ${file.layer}, Complexity: ${file.complexity || 1.0}]\n\`\`\`${extName}\n${skelBlockContent}\n\`\`\`\n\n`;
         } else {
-          skelBlock = `<file path="${file.path}" type="skeleton">\n${skelBlockContent}\n</file>\n`;
+          skelBlock = `<file path="${file.path}" type="skeleton" pagerank="${file.pagerank.toFixed(3)}" layer="${file.layer}" complexity="${file.complexity || 1.0}">\n${skelBlockContent}\n</file>\n`;
         }
 
         const skelTokens = estimateTokens(skelBlock);
@@ -1173,21 +1175,15 @@ node src/cli.js mcp .
       }
 
       // Estimate tokens for header/stats
+      // Estimate tokens for header/stats (static header to support KV-Cache caching)
       let headerAndStats = '';
       if (packFormat === 'markdown') {
-        headerAndStats = `<!-- HSS-CE Codebase Context Pack (Budget: ${tokenBudget} tokens) -->\n\n` +
+        headerAndStats = `<!-- HSS-CE Codebase Context Pack -->\n\n` +
           `# HSS-CE Codebase Context Pack\n\n` +
-          `## 1. System Stats\n` +
-          `* Total Files: ${skeletonFiles.length}\n` +
-          `* Active Files: ${activeFiles ? activeFiles.length : 0}\n\n` +
-          `## 2. Codebase Skeleton Map\n`;
+          `## 1. Codebase Skeleton Map\n`;
       } else {
-        headerAndStats = `<!-- HSS-CE Codebase Context Pack (Budget: ${tokenBudget} tokens) -->\n` +
-          `<hss_ce_context_pack budget="${tokenBudget}">\n` +
-          `  <system_stats>\n` +
-          `    <total_files>${skeletonFiles.length}</total_files>\n` +
-          `    <active_files>${activeFiles ? activeFiles.length : 0}</active_files>\n` +
-          `  </system_stats>\n\n` +
+        headerAndStats = `<!-- HSS-CE Codebase Context Pack -->\n` +
+          `<hss_ce_context_pack>\n` +
           `  <codebase_skeleton_map>\n`;
       }
 
@@ -1230,9 +1226,9 @@ node src/cli.js mcp .
             if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
             if (extName === 'ts' || extName === 'js') extName = 'javascript';
             if (extName === 'py') extName = 'python';
-            fileBlock = `### File: ${item.file.path}\n\`\`\`${extName}\n${fileContent}\n\`\`\`\n\n`;
+            fileBlock = `### File: ${item.file.path} [PageRank: ${item.file.pagerank.toFixed(3)}, Layer: ${item.file.layer}, Complexity: ${item.file.complexity || 1.0}]\n\`\`\`${extName}\n${fileContent}\n\`\`\`\n\n`;
           } else {
-            fileBlock = `<file path="${item.file.path}">\n${fileContent}\n</file>\n`;
+            fileBlock = `<file path="${item.file.path}" pagerank="${item.file.pagerank.toFixed(3)}" layer="${item.file.layer}" complexity="${item.file.complexity || 1.0}">\n${fileContent}\n</file>\n`;
           }
 
           const fileTokens = estimateTokens(fileBlock);
@@ -1258,9 +1254,9 @@ node src/cli.js mcp .
             if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
             if (extName === 'ts' || extName === 'js') extName = 'javascript';
             if (extName === 'py') extName = 'python';
-            fileBlock = `### File: ${item.file.path}\n\`\`\`${extName}\n${fileContent}\n\`\`\`\n\n`;
+            fileBlock = `### File: ${item.file.path} [PageRank: ${item.file.pagerank.toFixed(3)}, Layer: ${item.file.layer}, Complexity: ${item.file.complexity || 1.0}]\n\`\`\`${extName}\n${fileContent}\n\`\`\`\n\n`;
           } else {
-            fileBlock = `<file path="${item.file.path}">\n${fileContent}\n</file>\n`;
+            fileBlock = `<file path="${item.file.path}" pagerank="${item.file.pagerank.toFixed(3)}" layer="${item.file.layer}" complexity="${item.file.complexity || 1.0}">\n${fileContent}\n</file>\n`;
           }
 
           const fileTokens = estimateTokens(fileBlock);
@@ -1275,19 +1271,24 @@ node src/cli.js mcp .
       let packedOutput = headerAndStats + skeletonBlocks;
 
       if (packFormat === 'markdown') {
-        packedOutput += `## 3. Reference File Contents\n`;
+        packedOutput += `## 2. Reference File Contents\n`;
         if (fullContentNonActive.length === 0) {
           packedOutput += `*No reference files included in full content (exceeded budget).*\n\n`;
         } else {
           packedOutput += fullContentNonActive.join('');
         }
 
-        packedOutput += `## 4. Active Files (Focus)\n`;
+        packedOutput += `## 3. Active Files (Focus)\n`;
         if (fullContentActive.length === 0) {
           packedOutput += `*No active files included in full content (exceeded budget).*\n\n`;
         } else {
           packedOutput += fullContentActive.join('');
         }
+
+        packedOutput += `## 4. System Stats\n` +
+          `* Total Files: ${skeletonFiles.length}\n` +
+          `* Active Files: ${activeFiles ? activeFiles.length : 0}\n` +
+          `* Token Budget: ${tokenBudget} tokens\n`;
       } else {
         packedOutput += `  </codebase_skeleton_map>\n\n` +
           `  <reference_file_contents>\n` +
@@ -1295,7 +1296,12 @@ node src/cli.js mcp .
           `  </reference_file_contents>\n\n` +
           `  <active_file_contents>\n` +
           (fullContentActive.length > 0 ? fullContentActive.join('') : '') +
-          `  </active_file_contents>\n` +
+          `  </active_file_contents>\n\n` +
+          `  <system_stats>\n` +
+          `    <total_files>${skeletonFiles.length}</total_files>\n` +
+          `    <active_files>${activeFiles ? activeFiles.length : 0}</active_files>\n` +
+          `    <budget>${tokenBudget}</budget>\n` +
+          `  </system_stats>\n` +
           `</hss_ce_context_pack>\n`;
       }
 
