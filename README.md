@@ -2,7 +2,7 @@
 
 HSS-CE is a lightweight, offline-first codebase indexer and Model Context Protocol (MCP) server. It optimizes how developers and AI coding agents explore, map, and interact with complex codebases.
 
-By calculating file significance using a simplified reference-count **PageRank** and parsing code structures (classes, functions, endpoints) using AST-aware parsing for Python and high-performance parser/regex engines for other languages, HSS-CE provides high-density context without wasting your token budget.
+By calculating file significance using a simplified reference-count **PageRank** and parsing code structures (classes, functions, endpoints, structs, traits) using AST-aware parsing (Python, JS/TS) and dedicated language-specific parsing engines (Go, Rust), HSS-CE provides high-density context without wasting your token budget.
 
 
 ---
@@ -26,7 +26,7 @@ HSS-CE is **not** a magical AI assistant that writes code for you. It is a struc
 * **Lazy Content Retrieval (CCR):** Exposes a `read_file_content` MCP tool so agents can receive lightweight codebase skeletons first and load full contents dynamically on-demand, enabling lossless token efficiency.
 
 ### 3. Current Limitations & What It is Not
-* **Hybrid AST-Regex Parsing Engine:** HSS-CE uses high-performance syntax parsers (Babel for JS/TS, Python AST module for Python) to resolve symbols, imports, and metadata accurately. For unsupported languages, it falls back to lightweight regex-based heuristic parsing. This balances parser speed, accuracy, and extensibility.
+* **Hybrid AST-Regex Parsing Engine:** HSS-CE uses high-performance syntax parsers (Babel for JS/TS, Python AST module for Python) to resolve symbols, imports, and metadata accurately, alongside dedicated language-specific parsers for **Go** (functions, structs, interfaces, imports) and **Rust** (functions, structs, traits, imports). For other unsupported languages, it falls back to lightweight regex-based heuristic parsing. This balances parser speed, accuracy, and extensibility.
 * **Dependency on Code Quality:** Local file summaries are parsed from comments/docstrings. If your codebase has zero comments, the summaries will be empty unless you explicitly run the remote LLM enrichment command (`hss-ce enrich`).
 
 
@@ -133,7 +133,7 @@ As of mid-2026, the AI agent ecosystem has evolved significantly. Below is a com
 
 | Feature | HSS-CE | Headroom (`chopratejas/headroom`) | CodeGraph (`colbymchenry/codegraph`) | Claude-Context (`zilliztech/claude-context`) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Parsing Engine** | Hybrid (AST-aware for JS/TS & Python, regex fallback) | AST-aware (Languages-specific) | Tree-sitter AST (High accuracy) | AST-aware chunking |
+| **Parsing Engine** | Hybrid (AST for JS/TS/Py, specialized regex for Go/Rust, regex fallback) | AST-aware (Languages-specific) | Tree-sitter AST (High accuracy) | AST-aware chunking |
 | **Search Method** | SQLite FTS5 (Local keyword/BM25) | Heuristic compression & retrieval | SQLite query/Call-graph lookup | Semantic vector search (Milvus) |
 | **Context Compression**| PageRank elision & Skeleton mode | SmartCrusher (JSON), CodeCompressor | Signature elision | Embedding-based filtering |
 | **Sync Mechanism** | Git hooks / CLI commands | Filesystem events / Proxy | Native FS watchers | Merkle trees |
@@ -145,9 +145,9 @@ As of mid-2026, the AI agent ecosystem has evolved significantly. Below is a com
 *   **Semantic Local Search:** Claude-Context's use of embeddings highlights the value of semantic search, which HSS-CE can adopt locally via lightweight libraries like `sqlite-vss` to avoid external API calls.
 
 ### 3. HSS-CE Future Roadmap & Implementation Plan
-*   **Phase 1: AST-Aware Parsing (Completed for Python; Broader Tree-sitter Planned)**
-    *   *Goal:* Integrate AST parsers (Node.js Babel for JS/TS, python3 `ast` module for Python) to resolve signatures, imports, inheritance, and decorator routes.
-    *   *Testing:* Verified with `tests/python_ast.test.js` and existing tests.
+*   **Phase 1: AST-Aware & Language-Specific Parsing (Completed for JS/TS, Python, Go, and Rust)**
+    *   *Goal:* Integrate AST/specialized parsers (Node.js Babel for JS/TS, python3 `ast` module for Python, regex-based parsers for Go & Rust) to resolve signatures, imports, structs, interfaces, and traits.
+    *   *Testing:* Verified with `tests/python_ast.test.js`, `tests/go_rust.test.js`, and existing tests.
 
 *   **Phase 2: KV-Cache prefix alignment**
     *   *Goal:* Implement deterministic prompt formatting to lock stable context chunks (e.g. system instructions, skeleton structures) at the beginning of prompt outputs.

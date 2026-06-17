@@ -134,7 +134,7 @@ export class CodeIndexer {
           this.getFiles(filePath, fileList);
         } else {
           const ext = path.extname(filePath);
-          if (['.js', '.ts', '.jsx', '.tsx', '.py', '.json', '.md', '.yaml', '.yml', '.toml', '.css', '.html', '.sh', '.sql'].includes(ext)) {
+          if (['.js', '.ts', '.jsx', '.tsx', '.py', '.go', '.rs', '.json', '.md', '.yaml', '.yml', '.toml', '.css', '.html', '.sh', '.sql'].includes(ext)) {
             fileList.push(filePath);
           }
         }
@@ -179,7 +179,7 @@ export class CodeIndexer {
                     return resolvedPath;
                   }
                   
-                  const extensions = ['.js', '.ts', '.jsx', '.tsx', '.py'];
+                  const extensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.go', '.rs'];
                   for (const ext of extensions) {
                     const testPath = resolvedPath + ext;
                     if (fs.existsSync(testPath)) {
@@ -225,7 +225,7 @@ export class CodeIndexer {
         return resolvedBase;
       }
 
-      const extensions = ['.js', '.ts', '.jsx', '.tsx', '.py'];
+      const extensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.go', '.rs'];
       
       // Try direct file extension match
       for (const ext of extensions) {
@@ -410,7 +410,7 @@ export class CodeIndexer {
       if (this.shouldIgnore(relativePath)) return;
       
       const ext = path.extname(filePath);
-      if (!['.js', '.ts', '.jsx', '.tsx', '.py', '.json', '.md', '.yaml', '.yml', '.toml', '.css', '.html', '.sh', '.sql'].includes(ext)) {
+      if (!['.js', '.ts', '.jsx', '.tsx', '.py', '.go', '.rs', '.json', '.md', '.yaml', '.yml', '.toml', '.css', '.html', '.sh', '.sql'].includes(ext)) {
         return;
       }
 
