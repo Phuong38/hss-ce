@@ -540,12 +540,15 @@ export async function runMcpServer(dbPath, rootDir) {
             const ext = path.extname(file.path);
             const isJs = ['.js', '.ts', '.jsx', '.tsx'].includes(ext);
             const isPy = ext === '.py';
-            if (isJs || isPy) {
+            const isGo = ext === '.go';
+            const isRs = ext === '.rs';
+            if (isJs || isPy || isGo || isRs) {
               skelBlockContent = generateSkeletonContent(content, ext, file.symbols, file.summary);
             } else if (ext === '.json') {
               skelBlockContent = compactJsonContent(content, file.path);
             } else {
-              skelBlockContent = `// [File content elided. Use read_file_content("${file.path}") to inspect full content.]`;
+              const commentPrefix = (isPy || isRs) ? '#' : '//';
+              skelBlockContent = `${commentPrefix} [File content elided. Use read_file_content("${file.path}") to inspect full content.]`;
             }
 
             let skelBlock = '';
@@ -554,6 +557,8 @@ export async function runMcpServer(dbPath, rootDir) {
               if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
               if (extName === 'ts' || extName === 'js') extName = 'javascript';
               if (extName === 'py') extName = 'python';
+              if (extName === 'go') extName = 'go';
+              if (extName === 'rs') extName = 'rust';
               skelBlock = `### File: ${file.path} (Skeleton) [PageRank: ${file.pagerank.toFixed(3)}, Layer: ${file.layer}, Complexity: ${file.complexity || 1.0}]\n\`\`\`${extName}\n${skelBlockContent}\n\`\`\`\n\n`;
             } else {
               skelBlock = `<file path="${file.path}" type="skeleton" pagerank="${file.pagerank.toFixed(3)}" layer="${file.layer}" complexity="${file.complexity || 1.0}">\n${skelBlockContent}\n</file>\n`;
@@ -618,6 +623,8 @@ export async function runMcpServer(dbPath, rootDir) {
                 if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
                 if (extName === 'ts' || extName === 'js') extName = 'javascript';
                 if (extName === 'py') extName = 'python';
+                if (extName === 'go') extName = 'go';
+                if (extName === 'rs') extName = 'rust';
                 fileBlock = `### File: ${item.file.path} [PageRank: ${item.file.pagerank.toFixed(3)}, Layer: ${item.file.layer}, Complexity: ${item.file.complexity || 1.0}]\n\`\`\`${extName}\n${fileContent}\n\`\`\`\n\n`;
               } else {
                 fileBlock = `<file path="${item.file.path}" pagerank="${item.file.pagerank.toFixed(3)}" layer="${item.file.layer}" complexity="${item.file.complexity || 1.0}">\n${fileContent}\n</file>\n`;
@@ -646,6 +653,8 @@ export async function runMcpServer(dbPath, rootDir) {
                 if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
                 if (extName === 'ts' || extName === 'js') extName = 'javascript';
                 if (extName === 'py') extName = 'python';
+                if (extName === 'go') extName = 'go';
+                if (extName === 'rs') extName = 'rust';
                 fileBlock = `### File: ${item.file.path} [PageRank: ${item.file.pagerank.toFixed(3)}, Layer: ${item.file.layer}, Complexity: ${item.file.complexity || 1.0}]\n\`\`\`${extName}\n${fileContent}\n\`\`\`\n\n`;
               } else {
                 fileBlock = `<file path="${item.file.path}" pagerank="${item.file.pagerank.toFixed(3)}" layer="${item.file.layer}" complexity="${item.file.complexity || 1.0}">\n${fileContent}\n</file>\n`;
@@ -841,6 +850,8 @@ export async function runMcpServer(dbPath, rootDir) {
               if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
               if (extName === 'ts' || extName === 'js') extName = 'javascript';
               if (extName === 'py') extName = 'python';
+              if (extName === 'go') extName = 'go';
+              if (extName === 'rs') extName = 'rust';
 
               output += '```' + extName + '\n';
               for (let i = startLine; i <= endLine; i++) {
@@ -912,6 +923,8 @@ export async function runMcpServer(dbPath, rootDir) {
                 if (extName === 'tsx' || extName === 'jsx') extName = 'typescript';
                 if (extName === 'ts' || extName === 'js') extName = 'javascript';
                 if (extName === 'py') extName = 'python';
+                if (extName === 'go') extName = 'go';
+                if (extName === 'rs') extName = 'rust';
 
                 codeSnippet += '```' + extName + '\n';
                 for (let i = startLine; i <= endLine; i++) {
