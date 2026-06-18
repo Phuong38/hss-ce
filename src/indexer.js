@@ -432,7 +432,7 @@ export class CodeIndexer {
     this.db.clearFileSymbolsAndDependencies(relativePath);
     try {
       const hash = currentHash || this.getFileHash(filePath);
-      const { symbols, imports, summary, complexity } = parseFile(filePath);
+      const { symbols, imports, summary, complexity, calls } = parseFile(filePath);
       const layer = determineLayer(relativePath, symbols);
       this.db.saveFile(relativePath, hash, layer, summary, complexity);
       
@@ -452,6 +452,12 @@ export class CodeIndexer {
           sym.startLine,
           sym.endLine
         );
+      }
+
+      if (calls) {
+        for (const call of calls) {
+          this.db.saveCall(relativePath, call.symbol, call.line);
+        }
       }
 
       return imports;

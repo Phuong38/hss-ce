@@ -9,6 +9,7 @@ class MockDatabase {
     this.files = [];
     this.symbols = [];
     this.dependencies = [];
+    this.calls = [];
     this.ranks = {};
     this.db = this;
   }
@@ -21,11 +22,13 @@ class MockDatabase {
     this.files = this.files.filter(f => f.path !== relativePath);
     this.symbols = this.symbols.filter(s => s.filePath !== relativePath);
     this.dependencies = this.dependencies.filter(d => d.from_file !== relativePath && d.to_file !== relativePath);
+    this.calls = this.calls.filter(c => c.filePath !== relativePath);
   }
 
   clearFileSymbolsAndDependencies(relativePath) {
     this.symbols = this.symbols.filter(s => s.filePath !== relativePath);
     this.dependencies = this.dependencies.filter(d => d.from_file !== relativePath);
+    this.calls = this.calls.filter(c => c.filePath !== relativePath);
   }
 
   saveFileContentFts(relativePath, fileContent) {
@@ -38,6 +41,10 @@ class MockDatabase {
 
   saveDependency(fromFile, toFile, symbol) {
     this.dependencies.push({ from_file: fromFile, to_file: toFile, symbol });
+  }
+
+  saveCall(relativePath, symbol, line) {
+    this.calls.push({ filePath: relativePath, symbol, line });
   }
 
   getAllFiles() {

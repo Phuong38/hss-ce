@@ -75,6 +75,15 @@ export class CodeDatabase {
     `);
 
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS calls (
+        file_path TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        line INTEGER NOT NULL,
+        FOREIGN KEY(file_path) REFERENCES files(path) ON DELETE CASCADE
+      );
+    `);
+
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS session_actions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         action_type TEXT NOT NULL,
@@ -90,6 +99,8 @@ export class CodeDatabase {
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_dependencies_from ON dependencies(from_file);`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_dependencies_symbol ON dependencies(symbol);`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_session_actions_timestamp ON session_actions(timestamp);`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_calls_file_path ON calls(file_path);`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_calls_symbol ON calls(symbol);`);
   }
 
   saveFileContentFts(filePath, content) {
@@ -210,6 +221,7 @@ export class CodeDatabase {
   clearFileSymbolsAndDependencies(filePath) {
     this.db.prepare(`DELETE FROM symbols WHERE file_path = ?;`).run(filePath);
     this.db.prepare(`DELETE FROM dependencies WHERE from_file = ?;`).run(filePath);
+    this.db.prepare(`DELETE FROM calls WHERE file_path = ?;`).run(filePath);
   }
 
   saveSymbol(filePath, name, type, signature, startLine, endLine) {
@@ -230,14 +242,26 @@ export class CodeDatabase {
     stmt.run(fromFile, toFile, symbol);
   }
 
-  getCallers(symbolName) {
-    // Find files that depend on this symbol name
+  saveCall(filePath, symbol, line) {
     const stmt = this.db.prepare(`
-      SELECT DISTINCT from_file as file_path, symbol 
+      INSERT INTO calls (file_path, symbol, line)
+      VALUES (?, ?, ?);
+    `);
+    stmt.run(filePath, symbol, line);
+  }
+
+  getCallers(symbolName) {
+    // Find files and lines that call/reference this symbol name
+    const stmt = this.db.prepare(`
+      SELECT DISTINCT from_file as file_path, symbol, NULL as line
       FROM dependencies 
+      WHERE symbol = ?
+      UNION ALL
+      SELECT file_path, symbol, line
+      FROM calls
       WHERE symbol = ?;
     `);
-    return stmt.all(symbolName);
+    return stmt.all(symbolName, symbolName);
   }
 
   getDefinition(symbolName) {

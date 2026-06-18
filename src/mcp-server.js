@@ -972,7 +972,7 @@ export async function runMcpServer(dbPath, rootDir) {
 ${codeSnippet}  </code_definition>
 
   <upstream_callers>
-${callers.length > 0 ? callers.map(c => `    <caller file="${c.file_path}" symbol="${c.symbol}" />`).join('\n') : '    <!-- No callers found -->'}
+${callers.length > 0 ? callers.map(c => `    <caller file="${c.file_path}" symbol="${c.symbol}"${c.line ? ` line="${c.line}"` : ''} />`).join('\n') : '    <!-- No callers found -->'}
   </upstream_callers>
 
   <downstream_dependencies>

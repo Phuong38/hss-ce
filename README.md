@@ -45,7 +45,7 @@ Imagine you need to modify a database schema file `src/db.js` in a large codebas
 ### B. How an AI Agent Uses HSS-CE (Under the Hood)
 When you ask your agent (e.g. Claude Code or Cursor): *"Find all callers of the authenticate function and tell me where it is defined"*, the agent bypasses slow search loops and makes a fast MCP tool call:
 1. Agent invokes `get_definition(symbol: "authenticate")` → HSS-CE queries SQLite and returns the exact file path and signature.
-2. Agent invokes `get_callers(symbol: "authenticate")` → HSS-CE returns a clean list of files and lines referencing the function.
+2. Agent invokes `get_callers(symbol: "authenticate")` → HSS-CE returns a clean list of files and exact line numbers referencing the function (supporting JS/TS, Python, Go, Rust).
 3. Agent invokes `get_dependency_path(fromFile: "src/main.js", toFile: "src/db.js")` → HSS-CE traces and lists the step-by-step import path between files.
 4. Agent invokes `search_symbols(query: "auth")` → HSS-CE fuzzy matches against indexed symbols and returns definition details.
 5. Agent invokes `search_code(query: "TODO: fix", isRegex: false)` → HSS-CE performs a lightning-fast SQLite FTS5 index search, ranking results by BM25 relevance and PageRank structural importance.
@@ -147,9 +147,9 @@ As of mid-2026, the AI agent ecosystem has evolved significantly. Below is a com
 *   **Semantic Local Search:** Claude-Context's use of embeddings highlights the value of semantic search, which HSS-CE can adopt locally via lightweight libraries like `sqlite-vss` to avoid external API calls.
 
 ### 3. HSS-CE Future Roadmap & Implementation Plan
-*   **Phase 1: AST-Aware & Language-Specific Parsing (Completed for JS/TS, Python, Go, and Rust)**
-    *   *Goal:* Integrate AST/specialized parsers (Node.js Babel for JS/TS, python3 `ast` module for Python, regex-based parsers for Go & Rust) to resolve signatures, imports, structs, interfaces, and traits.
-    *   *Testing:* Verified with `tests/python_ast.test.js`, `tests/go_rust.test.js`, and existing tests.
+*   **Phase 1: AST-Aware & Language-Specific Parsing & Call-Graph tracking (Completed for JS/TS, Python, Go, and Rust)**
+    *   *Goal:* Integrate AST/specialized parsers (Node.js Babel for JS/TS, python3 `ast` module for Python, regex-based parsers for Go & Rust) to resolve signatures, imports, structs, interfaces, and traits, as well as precise CallExpression (call-site) line-number tracking.
+    *   *Testing:* Verified with `tests/python_ast.test.js`, `tests/go_rust.test.js`, `tests/calls.test.js` and existing tests.
 
 *   **Phase 2: KV-Cache prefix alignment**
     *   *Goal:* Implement deterministic prompt formatting to lock stable context chunks (e.g. system instructions, skeleton structures) at the beginning of prompt outputs.

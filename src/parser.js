@@ -56,25 +56,29 @@ export function parseFile(filePath) {
   
   const symbols = [];
   const imports = [];
+  const calls = [];
   let summary = extractSummary(content, ext);
 
   if (ext === '.js' || ext === '.ts' || ext === '.jsx' || ext === '.tsx') {
-    parseJS(content, symbols, imports);
+    parseJS(content, symbols, imports, calls);
   } else if (ext === '.py') {
     const astResult = parsePythonAST(filePath);
     if (astResult) {
       symbols.push(...astResult.symbols);
       imports.push(...astResult.imports);
+      if (astResult.calls) {
+        calls.push(...astResult.calls);
+      }
       if (astResult.summary) {
         summary = astResult.summary;
       }
     } else {
-      parsePython(content, symbols, imports);
+      parsePython(content, symbols, imports, calls);
     }
   } else if (ext === '.go') {
-    parseGo(content, symbols, imports);
+    parseGo(content, symbols, imports, calls);
   } else if (ext === '.rs') {
-    parseRust(content, symbols, imports);
+    parseRust(content, symbols, imports, calls);
   }
 
 
@@ -93,7 +97,7 @@ export function parseFile(filePath) {
   });
   const complexity = 1.0 + symbols.length * 1.5 + keywordMatches * 0.5;
 
-  return { symbols, imports, summary, complexity };
+  return { symbols, imports, summary, complexity, calls };
 }
 
 function walk(node, callback) {
@@ -115,7 +119,7 @@ function walk(node, callback) {
   }
 }
 
-function parseJS(content, symbols, imports) {
+function parseJS(content, symbols, imports, calls) {
   try {
     const ast = babelParse(content, {
       sourceType: 'module',
@@ -230,9 +234,10 @@ function parseJS(content, symbols, imports) {
         });
       }
 
-      // 5. Express/Route definitions
+      // 5. Express/Route definitions & Calls extraction
       else if (node.type === 'CallExpression') {
         const callee = node.callee;
+        let isRoute = false;
         if (callee.type === 'MemberExpression') {
           const obj = callee.object;
           const prop = callee.property;
@@ -242,6 +247,7 @@ function parseJS(content, symbols, imports) {
             prop.type === 'Identifier' &&
             ['get', 'post', 'put', 'delete', 'patch'].includes(prop.name)
           ) {
+            isRoute = true;
             const method = prop.name.toUpperCase();
             if (node.arguments.length > 0) {
               const arg = node.arguments[0];
@@ -258,6 +264,26 @@ function parseJS(content, symbols, imports) {
                   endLine
                 });
               }
+            }
+          }
+        }
+        
+        if (!isRoute) {
+          let callSymbol = null;
+          if (callee.type === 'Identifier') {
+            callSymbol = callee.name;
+          } else if (callee.type === 'MemberExpression' || callee.type === 'OptionalMemberExpression') {
+            if (callee.property && callee.property.type === 'Identifier') {
+              callSymbol = callee.property.name;
+            }
+          }
+          
+          if (callSymbol && !['require', 'import', 'super', 'expect', 'describe', 'it', 'test', 'beforeEach', 'afterEach'].includes(callSymbol)) {
+            if (callee.type === 'MemberExpression' && callee.object && callee.object.type === 'Identifier' && callee.object.name === 'console') {
+              // skip console calls
+            } else {
+              const startLine = node.loc ? node.loc.start.line : 1;
+              calls.push({ symbol: callSymbol, line: startLine });
             }
           }
         }
@@ -301,11 +327,11 @@ function parseJS(content, symbols, imports) {
     });
 
   } catch (err) {
-    parseJSRegex(content, symbols, imports);
+    parseJSRegex(content, symbols, imports, calls);
   }
 }
 
-function parseJSRegex(content, symbols, imports) {
+function parseJSRegex(content, symbols, imports, calls) {
   // 1. Imports
   // Pattern: import defaultVal, { val1, val2 } from 'module'
   // Simplified matching for import statements
@@ -428,9 +454,21 @@ function parseJSRegex(content, symbols, imports) {
       endLine: line
     });
   }
+
+  // Extract calls via regex
+  let callMatch;
+  const callRegex = /\b([a-zA-Z_]\w*)\s*\(/g;
+  const JS_KEYWORDS = new Set(['if', 'for', 'while', 'switch', 'catch', 'function', 'class', 'const', 'let', 'var', 'import', 'export', 'default', 'return', 'throw', 'require', 'expect', 'describe', 'it', 'test', 'super']);
+  while ((callMatch = callRegex.exec(content)) !== null) {
+    const sym = callMatch[1];
+    if (!JS_KEYWORDS.has(sym)) {
+      const line = getLineNumber(content, callMatch.index);
+      calls.push({ symbol: sym, line });
+    }
+  }
 }
 
-function parsePython(content, symbols, imports) {
+function parsePython(content, symbols, imports, calls) {
   let match;
   
   // 1. Imports
@@ -509,9 +547,21 @@ function parsePython(content, symbols, imports) {
       endLine: line
     });
   }
+
+  // Extract calls via regex
+  let callMatch;
+  const callRegex = /\b([a-zA-Z_]\w*)\s*\(/g;
+  const PY_KEYWORDS = new Set(['if', 'elif', 'else', 'for', 'while', 'def', 'class', 'import', 'from', 'as', 'return', 'try', 'except', 'finally', 'with', 'assert', 'raise', 'pass', 'print', 'super', 'len', 'range', 'list', 'dict', 'set', 'tuple']);
+  while ((callMatch = callRegex.exec(content)) !== null) {
+    const sym = callMatch[1];
+    if (!PY_KEYWORDS.has(sym)) {
+      const line = getLineNumber(content, callMatch.index);
+      calls.push({ symbol: sym, line });
+    }
+  }
 }
 
-function parseGo(content, symbols, imports) {
+function parseGo(content, symbols, imports, calls) {
   let match;
   
   // 1. Go Imports
@@ -583,9 +633,21 @@ function parseGo(content, symbols, imports) {
       endLine: line
     });
   }
+
+  // Extract calls via regex
+  let callMatch;
+  const callRegex = /\b([a-zA-Z_]\w*)\s*\(/g;
+  const GO_KEYWORDS = new Set(['if', 'for', 'switch', 'select', 'case', 'default', 'defer', 'go', 'func', 'type', 'struct', 'interface', 'import', 'package', 'return', 'panic', 'recover', 'make', 'new', 'append', 'len', 'cap', 'copy', 'close', 'delete', 'print', 'println']);
+  while ((callMatch = callRegex.exec(content)) !== null) {
+    const sym = callMatch[1];
+    if (!GO_KEYWORDS.has(sym)) {
+      const line = getLineNumber(content, callMatch.index);
+      calls.push({ symbol: sym, line });
+    }
+  }
 }
 
-function parseRust(content, symbols, imports) {
+function parseRust(content, symbols, imports, calls) {
   let match;
 
   // 1. Rust Imports
@@ -653,6 +715,18 @@ function parseRust(content, symbols, imports) {
       startLine: line,
       endLine: line
     });
+  }
+
+  // Extract calls via regex
+  let callMatch;
+  const callRegex = /\b([a-zA-Z_]\w*)\s*(?:!\s*)?\(/g;
+  const RUST_KEYWORDS = new Set(['if', 'else', 'match', 'for', 'while', 'loop', 'fn', 'struct', 'enum', 'trait', 'impl', 'use', 'mod', 'pub', 'async', 'await', 'let', 'mut', 'return', 'unsafe', 'const', 'static', 'type', 'println', 'print', 'panic', 'format']);
+  while ((callMatch = callRegex.exec(content)) !== null) {
+    const sym = callMatch[1];
+    if (!RUST_KEYWORDS.has(sym)) {
+      const line = getLineNumber(content, callMatch.index);
+      calls.push({ symbol: sym, line });
+    }
   }
 }
 
@@ -878,6 +952,7 @@ def parse_py(filepath):
 
     symbols = []
     imports = []
+    calls = []
     
     summary = ast.get_docstring(tree)
     if summary:
@@ -893,6 +968,17 @@ def parse_py(filepath):
             module = node.module or ''
             for name in node.names:
                 imports.append({'symbol': name.asname or name.name, 'from': module})
+            self.generic_visit(node)
+
+        def visit_Call(self, node):
+            func = node.func
+            name = None
+            if isinstance(func, ast.Name):
+                name = func.id
+            elif isinstance(func, ast.Attribute):
+                name = func.attr
+            if name and name not in ('app', 'router', 'get', 'post', 'put', 'delete', 'patch'):
+                calls.append({'symbol': name, 'line': node.lineno})
             self.generic_visit(node)
 
         def visit_ClassDef(self, node):
@@ -973,7 +1059,7 @@ def parse_py(filepath):
                 })
 
     Visitor().visit(tree)
-    print(json.dumps({'symbols': symbols, 'imports': imports, 'summary': summary}))
+    print(json.dumps({'symbols': symbols, 'imports': imports, 'summary': summary, 'calls': calls}))
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
