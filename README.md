@@ -22,7 +22,7 @@ HSS-CE is **not** a magical AI assistant that writes code for you. It is a struc
 * **Automated Redaction (Secret Guard):** Before packing codebase files to send to LLM context, HSS-CE automatically redacts credentials, private keys, and API tokens, preventing security leaks.
 * **Git-Aware Ignore System:** Automatically respects `.gitignore` rules in addition to local `.hssceignore` patterns, ensuring build artifacts, dependencies, and temporary files are excluded from the index.
 * **Cache-Aligned Context Packing:** Re-orders context packs to place stable components (static headers, path-sorted skeleton maps, reference files) at the beginning of the prompt, and highly dynamic variables (like system stats and token budget) at the very end. This maximizes LLM provider KV caching hits, saving up to 50%+ on prompt cost and latency.
-* **Smart JSON Compaction:** Automatically minifies and compacts configuration files (like `package.json` devDependencies) to strip noise and reduce token consumption.
+* **Smart JSON Crusher:** Automatically minifies, prunes, and recursively crushes generic JSON files. Slices large arrays, truncates long strings, limits large object keys, and elides deep nesting to save up to 90% of tokens on configuration and mock data files.
 * **Lazy Content Retrieval (CCR):** Exposes a `read_file_content` MCP tool so agents can receive lightweight codebase skeletons first and load full contents dynamically on-demand, enabling lossless token efficiency.
 
 ### 3. Current Limitations & What It is Not
@@ -135,7 +135,7 @@ As of mid-2026, the AI agent ecosystem has evolved significantly. Below is a com
 | :--- | :--- | :--- | :--- | :--- |
 | **Parsing Engine** | Hybrid (AST for JS/TS/Py, specialized regex for Go/Rust, regex fallback) | AST-aware (Languages-specific) | Tree-sitter AST (High accuracy) | AST-aware chunking |
 | **Search Method** | SQLite FTS5 (Local keyword/BM25) | Heuristic compression & retrieval | SQLite query/Call-graph lookup | Semantic vector search (Milvus) |
-| **Context Compression**| PageRank elision & Skeleton mode | SmartCrusher (JSON), CodeCompressor | Signature elision | Embedding-based filtering |
+| **Context Compression**| PageRank elision, Skeleton mode & Smart JSON Crusher | SmartCrusher (JSON), CodeCompressor | Signature elision | Embedding-based filtering |
 | **Sync Mechanism** | Git hooks / CLI commands | Filesystem events / Proxy | Native FS watchers | Merkle trees |
 | **Deployment** | 100% Offline (Local CLI/MCP) | Proxy / MCP server | 100% Offline (Local MCP) | Hybrid/Cloud (Requires DB & Key) |
 
@@ -153,6 +153,8 @@ As of mid-2026, the AI agent ecosystem has evolved significantly. Below is a com
     *   *Goal:* Implement deterministic prompt formatting to lock stable context chunks (e.g. static headers, skeleton structures, and reference files sorted by path) at the beginning of prompt outputs, while moving highly dynamic variables (like total/active file counts and budget) to the footer.
 *   **Phase 3: Real-Time Sync Watcher (Completed)**
     *   *Goal:* Add a local file watcher using `chokidar` to automatically sync SQLite `.hss-ce/graph.db` on file change events.
+*   **Phase 4: Smart JSON Crusher (Completed)**
+    *   *Goal:* Recursively prune, slice, and compress nested JSON objects, arrays, and long strings under token budget constraints to save up to 90% of tokens on configuration and mock data files.
 
 ---
 

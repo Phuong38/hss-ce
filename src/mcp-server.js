@@ -42,7 +42,44 @@ function compactJsonContent(content, filePath) {
       }
       return JSON.stringify(compacted);
     }
-    return JSON.stringify(obj);
+
+    const crush = (val, depth = 0) => {
+      if (depth > 6) {
+        return "... [deep nesting elided]";
+      }
+      if (Array.isArray(val)) {
+        if (val.length === 0) return [];
+        const maxLen = 3;
+        if (val.length > maxLen) {
+          const crushedArray = val.slice(0, maxLen).map(item => crush(item, depth + 1));
+          crushedArray.push(`... [${val.length - maxLen} items elided]`);
+          return crushedArray;
+        }
+        return val.map(item => crush(item, depth + 1));
+      }
+      if (val !== null && typeof val === 'object') {
+        const keys = Object.keys(val);
+        const compactedObj = {};
+        const maxKeys = 10;
+        const keysToProcess = keys.slice(0, maxKeys);
+        for (const k of keysToProcess) {
+          compactedObj[k] = crush(val[k], depth + 1);
+        }
+        if (keys.length > maxKeys) {
+          compactedObj['__elided_keys__'] = `... [${keys.length - maxKeys} keys elided]`;
+        }
+        return compactedObj;
+      }
+      if (typeof val === 'string') {
+        const maxStrLen = 150;
+        if (val.length > maxStrLen) {
+          return val.slice(0, maxStrLen) + `... [truncated ${val.length - maxStrLen} chars]`;
+        }
+      }
+      return val;
+    };
+
+    return JSON.stringify(crush(obj));
   } catch (err) {
     return content;
   }
