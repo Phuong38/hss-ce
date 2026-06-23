@@ -237,16 +237,31 @@ export async function runMcpServer(dbPath, rootDir) {
         },
         {
           name: 'search_symbols',
-          description: 'Search for symbol definitions matching a query pattern (fuzzy search).',
+          description: 'Search for symbol definitions matching a query pattern with optional structural filters.',
           inputSchema: {
             type: 'object',
             properties: {
               query: {
                 type: 'string',
                 description: 'The search query/pattern to match against symbol names (e.g. "auth")'
+              },
+              type: {
+                type: 'string',
+                description: 'Filter by symbol type (e.g., function, class, route, interface, struct, trait)'
+              },
+              layer: {
+                type: 'string',
+                description: 'Filter by file layer (e.g., entrypoint, service, storage, config, documentation)'
+              },
+              minPageRank: {
+                type: 'number',
+                description: 'Minimum PageRank score of the containing file'
+              },
+              maxComplexity: {
+                type: 'number',
+                description: 'Maximum complexity of the containing file'
               }
-            },
-            required: ['query']
+            }
           }
         },
         {
@@ -976,18 +991,24 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
         }
 
         case 'search_symbols': {
-          const query = args?.query;
-          if (!query) {
-            throw new Error('Query parameter is required');
+          const query = args?.query || '';
+          const type = args?.type || null;
+          const layer = args?.layer || null;
+          const minPageRank = args?.minPageRank !== undefined ? args.minPageRank : null;
+          const maxComplexity = args?.maxComplexity !== undefined ? args.maxComplexity : null;
+
+          if (!query && !type && !layer && minPageRank === null && maxComplexity === null) {
+            throw new Error('At least one search parameter or filter must be provided');
           }
-          const results = db.searchSymbols(query);
+
+          const results = db.searchSymbols(query, { type, layer, minPageRank, maxComplexity });
           return {
             content: [
               {
                 type: 'text',
                 text: results.length > 0
                   ? JSON.stringify(results, null, 2)
-                  : `No symbols matching "${query}" found.`
+                  : 'No symbols matching the criteria found.'
               }
             ]
           };

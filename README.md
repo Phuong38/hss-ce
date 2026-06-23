@@ -19,6 +19,7 @@ HSS-CE is **not** a magical AI assistant that writes code for you. It is a struc
 ### 2. For AI Coding Agents (Context Optimization)
 * **Eliminate Token Waste:** Coding agents (like Claude Code, Cursor, Aider) often read entire files or directory trees to understand import flows. HSS-CE exposes an MCP server that lets agents query precise skeletal structures and dependency trees under strict token budgets.
 * **Precise Symbol Navigation:** Instead of performing noisy text searches (like raw `grep` or `ripgrep`), agents use structured database queries to resolve exact function definitions and caller locations.
+* **Structural Symbol Search:** Allows agents and developers to query symbols with fine-grained filters like symbol type (`class`, `function`, `route`, `struct`, `trait`), codebase layer (`entrypoint`, `service`, `storage`), minimum PageRank, or maximum complexity, enabling highly focused context retrieval.
 * **Automated Redaction (Secret Guard):** Before packing codebase files to send to LLM context, HSS-CE automatically redacts credentials, private keys, and API tokens, preventing security leaks.
 * **Git-Aware Ignore System:** Automatically respects `.gitignore` rules in addition to local `.hssceignore` patterns, ensuring build artifacts, dependencies, and temporary files are excluded from the index.
 * **Cache-Aligned Context Packing:** Re-orders context packs to place stable components (static headers, path-sorted skeleton maps, reference files) at the beginning of the prompt, and highly dynamic variables (like system stats and token budget) at the very end. This maximizes LLM provider KV caching hits, saving up to 50%+ on prompt cost and latency.
@@ -46,7 +47,7 @@ When you ask your agent (e.g. Claude Code or Cursor): *"Find all callers of the 
 1. Agent invokes `get_definition(symbol: "authenticate")` → HSS-CE queries SQLite and returns the exact file path and signature.
 2. Agent invokes `get_callers(symbol: "authenticate")` → HSS-CE returns a clean list of files and lines referencing the function.
 3. Agent invokes `get_dependency_path(fromFile: "src/main.js", toFile: "src/db.js")` → HSS-CE traces and lists the step-by-step import path between files.
-4. Agent invokes `search_symbols(query: "auth")` → HSS-CE fuzzy matches against indexed symbols and returns definition details.
+4. Agent invokes `search_symbols(query: "auth", type: "route", layer: "entrypoint")` → HSS-CE filters and returns exact matching symbol definitions and metadata.
 5. Agent invokes `search_code(query: "TODO: fix", isRegex: false)` → HSS-CE performs a lightning-fast SQLite FTS5 index search, ranking results by BM25 relevance and PageRank structural importance.
 6. Agent invokes `check_index_drift()` → HSS-CE returns drift status to verify if index matches files on disk.
 7. Agent invokes `get_change_impact(target: "src/db.js", depth: 3)` → HSS-CE recursively traces upstream imports to assess blast radius before modifying any code.
@@ -118,7 +119,7 @@ If you prefer using the terminal manually, HSS-CE provides the following command
 | `hss-ce tour <path>` | `hss-ce tour .` | Display a step-by-step onboarding walkthrough tour of the codebase. |
 | `hss-ce query <path> <sym>` | `hss-ce query . validateUser` | Instantly lookup definition and callers for a specific symbol. |
 | `hss-ce path <path> <from> <to>` | `hss-ce path . src/cli.js src/db.js` | Find directed dependency/import path chain from one file to another. |
-| `hss-ce search <path> <query>` | `hss-ce search . auth` | Fuzzy search symbol names matching query pattern. |
+| `hss-ce search <path> [query]` | `hss-ce search . auth --type=route --layer=entrypoint` | Fuzzy search symbol names matching query pattern. Supports flags: `--type=type`, `--layer=layer`, `--min-pagerank=rank`, `--max-complexity=complexity`. |
 | `hss-ce search-code <path> <q>` | `hss-ce search-code . TODO --regex` | Search text snippet/regex across indexed files. Add `--regex` for regex pattern. |
 | `hss-ce pack <path>` | `hss-ce pack . --budget=2000 --format=markdown --progressive --sort=path` | Package source/config/docs files into structured XML/Markdown for LLM context, with secret redacting. Supports progressive fallback compression to skeletons and deterministic sorting. |
 | `hss-ce enrich <path>` | `hss-ce enrich .` | (Optional) Fetch AI-generated summaries via Gemini API (requires `GEMINI_API_KEY`). |

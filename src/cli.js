@@ -1317,19 +1317,35 @@ node src/cli.js mcp .
 
     case 'search': {
       const db = new CodeDatabase(dbPath);
-      const query = args.slice(1).filter(a => !a.startsWith('-'))[1];
-      if (!query) {
-        console.error('Usage: hss-ce search <path> <query>');
+      const query = args.slice(1).filter(a => !a.startsWith('-'))[1] || '';
+      
+      const typeFlag = args.find(a => a.startsWith('--type='));
+      const type = typeFlag ? typeFlag.split('=')[1] : null;
+
+      const layerFlag = args.find(a => a.startsWith('--layer='));
+      const layer = layerFlag ? layerFlag.split('=')[1] : null;
+
+      const minPrFlag = args.find(a => a.startsWith('--min-pagerank='));
+      const minPageRank = minPrFlag ? parseFloat(minPrFlag.split('=')[1]) : null;
+
+      const maxCompFlag = args.find(a => a.startsWith('--max-complexity='));
+      const maxComplexity = maxCompFlag ? parseFloat(maxCompFlag.split('=')[1]) : null;
+
+      if (!query && !type && !layer && minPageRank === null && maxComplexity === null) {
+        console.error('Usage: hss-ce search <path> <query> [flags]');
+        console.error('Flags: --type=type, --layer=layer, --min-pagerank=rank, --max-complexity=complexity');
         process.exit(1);
       }
-      const results = db.searchSymbols(query);
+
+      const results = db.searchSymbols(query, { type, layer, minPageRank, maxComplexity });
       if (results.length === 0) {
-        console.log(`No symbols matching "${query}" found.`);
+        console.log('No symbols matching the criteria found.');
       } else {
-        console.log(`=== SYMBOLS MATCHING "${query}" ===`);
+        console.log('=== SYMBOLS MATCHING SEARCH CRITERIA ===');
         results.forEach(sym => {
           console.log(`\n📄 [${sym.type.toUpperCase()}] ${sym.name} (File: ${sym.file_path}:${sym.start_line})`);
           if (sym.signature) console.log(`   Signature: ${sym.signature}`);
+          console.log(`   Metrics: Rank=${sym.pagerank.toFixed(3)} | Layer=${sym.layer} | Complexity=${sym.complexity}`);
         });
       }
       break;
@@ -1513,7 +1529,8 @@ Commands:
                            Flags: --compact (elide to signatures under budget), --budget=1000
   query <path> <symbol>    Lookup definition and callers for a symbol.
   path <path> <from> <to>  Find import path chain from one file to another.
-  search <path> <query>    Fuzzy search symbol names matching query pattern.
+  search <path> [query]    Fuzzy search symbol names matching query pattern.
+                           Flags: --type=type, --layer=layer, --min-pagerank=rank, --max-complexity=complexity
   search-code <path> <q>   Search text snippet/regex across indexed files.
                            Flags: --regex
   graph <path>             Print Mermaid file dependency graph.

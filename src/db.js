@@ -250,14 +250,48 @@ export class CodeDatabase {
     return stmt.all(symbolName);
   }
 
-  searchSymbols(query) {
-    // Fuzzy search for symbol names matching the query pattern
-    const stmt = this.db.prepare(`
-      SELECT file_path, name, type, signature, start_line, end_line 
-      FROM symbols 
-      WHERE name LIKE ?;
-    `);
-    return stmt.all(`%${query}%`);
+  searchSymbols(query, filters = {}) {
+    const conditions = [];
+    const params = [];
+
+    if (query) {
+      conditions.push('s.name LIKE ?');
+      params.push(`%${query}%`);
+    }
+
+    if (filters.type) {
+      conditions.push('s.type = ?');
+      params.push(filters.type);
+    }
+
+    if (filters.layer) {
+      conditions.push('f.layer = ?');
+      params.push(filters.layer);
+    }
+
+    if (filters.minPageRank !== undefined && filters.minPageRank !== null) {
+      conditions.push('f.pagerank >= ?');
+      params.push(Number(filters.minPageRank));
+    }
+
+    if (filters.maxComplexity !== undefined && filters.maxComplexity !== null) {
+      conditions.push('f.complexity <= ?');
+      params.push(Number(filters.maxComplexity));
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const sql = `
+      SELECT s.file_path, s.name, s.type, s.signature, s.start_line, s.end_line, f.pagerank, f.layer, f.complexity
+      FROM symbols s
+      JOIN files f ON s.file_path = f.path
+      ${whereClause}
+      ORDER BY f.pagerank DESC, s.name ASC
+      LIMIT 100;
+    `;
+
+    const stmt = this.db.prepare(sql);
+    return stmt.all(...params);
   }
 
   getDependencyPath(fromFile, toFile) {
