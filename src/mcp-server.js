@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { CodeDatabase } from './db.js';
 import { CodeIndexer } from './indexer.js';
-import { stripComments, generateSkeletonContent } from './parser.js';
+import { stripComments, generateSkeletonContent, minifySyntax } from './parser.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
@@ -164,6 +164,11 @@ export async function runMcpServer(dbPath, rootDir) {
                 description: 'Strip comments from packaged files to conserve token budget (default false)',
                 default: false
               },
+              minifySyntax: {
+                type: 'boolean',
+                description: 'Minify code syntax (truncate long strings, collapse blank lines) to save tokens (default false)',
+                default: false
+              },
               format: {
                 type: 'string',
                 description: 'Output format: "xml" or "markdown" (default "xml")',
@@ -295,6 +300,11 @@ export async function runMcpServer(dbPath, rootDir) {
               filePath: {
                 type: 'string',
                 description: 'The path of the file to read (can be absolute or relative)'
+              },
+              minifySyntax: {
+                type: 'boolean',
+                description: 'Minify code syntax (truncate long strings, collapse blank lines) to save tokens (default false)',
+                default: false
               }
             },
             required: ['filePath']
@@ -500,6 +510,7 @@ export async function runMcpServer(dbPath, rootDir) {
         case 'pack_context': {
           const activeFiles = args?.activeFiles || null;
           const noComments = args?.noComments || false;
+          const minifySyntaxParam = args?.minifySyntax || false;
           const format = args?.format || 'xml';
           const compact = args?.compact || false;
           const progressive = args?.progressive || false;
@@ -613,6 +624,8 @@ export async function runMcpServer(dbPath, rootDir) {
               const ext = path.extname(item.file.path);
               if (ext === '.json') {
                 fileContent = compactJsonContent(fileContent, item.file.path);
+              } else if (minifySyntaxParam) {
+                fileContent = minifySyntax(fileContent, ext);
               } else if (noComments) {
                 fileContent = stripComments(fileContent, ext);
               }
@@ -643,6 +656,8 @@ export async function runMcpServer(dbPath, rootDir) {
               const ext = path.extname(item.file.path);
               if (ext === '.json') {
                 fileContent = compactJsonContent(fileContent, item.file.path);
+              } else if (minifySyntaxParam) {
+                fileContent = minifySyntax(fileContent, ext);
               } else if (noComments) {
                 fileContent = stripComments(fileContent, ext);
               }
@@ -1131,10 +1146,13 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
           }
 
           const content = fs.readFileSync(absPath, 'utf-8');
+          const isMinify = args?.minifySyntax || false;
           
           let compacted = content;
           if (path.extname(relPath) === '.json') {
             compacted = compactJsonContent(content, relPath);
+          } else if (isMinify) {
+            compacted = minifySyntax(content, path.extname(relPath));
           }
           const redacted = redactSecrets(compacted);
 

@@ -742,6 +742,47 @@ export function stripComments(content, ext) {
   return content;
 }
 
+export function minifySyntax(content, ext) {
+  let minified = stripComments(content, ext);
+
+  // Compress empty lines: replace triple or more consecutive newlines with double newlines
+  minified = minified.replace(/\n\s*\n\s*\n/g, '\n\n');
+
+  // Handle Python triple quotes explicitly first
+  if (ext === '.py') {
+    const pyTripleQuoteRegex = /"""([\s\S]*?)"""|'''([\s\S]*?)'''/g;
+    minified = minified.replace(pyTripleQuoteRegex, (match, doubleInner, singleInner) => {
+      const inner = doubleInner !== undefined ? doubleInner : singleInner;
+      const quote = doubleInner !== undefined ? '"""' : "'''";
+      if (match.length > 80 && inner.length > 60) {
+        const start = inner.slice(0, 30);
+        const end = inner.slice(-30);
+        const elidedCount = inner.length - 60;
+        return `${quote}${start}... [elided ${elidedCount} chars] ...${end}${quote}`;
+      }
+      return match;
+    });
+  }
+
+  // Truncate long strings: regex find single-line quotes (", ', `)
+  const stringRegex = /"([^"\\]|\\.)*"|'([^'\\]|\\.)*'|`([^`\\]|\\.)*`/g;
+  minified = minified.replace(stringRegex, (match) => {
+    if (match.length > 80) {
+      const quote = match[0];
+      const inner = match.slice(1, -1);
+      if (inner.length > 60) {
+        const start = inner.slice(0, 30);
+        const end = inner.slice(-30);
+        const elidedCount = inner.length - 60;
+        return `${quote}${start}... [elided ${elidedCount} chars] ...${end}${quote}`;
+      }
+    }
+    return match;
+  });
+
+  return minified;
+}
+
 export function generateSkeletonContent(content, ext, symbols = [], summary = null) {
   const isJs = ['.js', '.ts', '.jsx', '.tsx'].includes(ext);
   const isPy = ext === '.py';

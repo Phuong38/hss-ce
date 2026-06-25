@@ -3,7 +3,7 @@
 import { CodeDatabase } from './db.js';
 import { CodeIndexer } from './indexer.js';
 import { runMcpServer } from './mcp-server.js';
-import { stripComments, generateSkeletonContent } from './parser.js';
+import { stripComments, generateSkeletonContent, minifySyntax } from './parser.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
@@ -241,6 +241,7 @@ const activeFiles = activeFlag ? activeFlag.split('=')[1].split(',') : null;
 const compact = args.includes('--compact');
 const noComments = args.includes('--no-comments');
 const progressive = args.includes('--progressive');
+const minifySyntaxFlag = args.includes('--minify-syntax');
 
 const sortFlag = args.find(a => a.startsWith('--sort='));
 const sortOption = sortFlag ? sortFlag.split('=')[1] : 'path';
@@ -1216,6 +1217,8 @@ node src/cli.js mcp .
           const ext = path.extname(item.file.path);
           if (ext === '.json') {
             fileContent = compactJsonContent(fileContent, item.file.path);
+          } else if (minifySyntaxFlag) {
+            fileContent = minifySyntax(fileContent, ext);
           } else if (noComments) {
             fileContent = stripComments(fileContent, ext);
           }
@@ -1244,6 +1247,8 @@ node src/cli.js mcp .
           const ext = path.extname(item.file.path);
           if (ext === '.json') {
             fileContent = compactJsonContent(fileContent, item.file.path);
+          } else if (minifySyntaxFlag) {
+            fileContent = minifySyntax(fileContent, ext);
           } else if (noComments) {
             fileContent = stripComments(fileContent, ext);
           }

@@ -41,9 +41,10 @@ function writeOrAppend(filePath, content) {
 function generateAgentRules(targetProject, cliPath) {
   console.log('\n\x1b[34m=== Generating Coding Agent Rules & Workflows ===\x1b[0m');
 
-  // 1. .agents/rules/hss-ce.md
   const rulesDir = path.join(targetProject, '.agents', 'rules');
   ensureDir(rulesDir);
+
+  // 1. .agents/rules/hss-ce.md
   const rulesPath = path.join(rulesDir, 'hss-ce.md');
   const rulesContent = `## HSS-CE (Hybrid Semantic-Structural Context Engine)
 
@@ -71,6 +72,22 @@ This project has an active HSS-CE indexer database at \`.hss-ce/graph.db\`.
 `;
   fs.writeFileSync(rulesPath, rulesContent, 'utf-8');
   console.log(`Created: ${rulesPath}`);
+
+  // 1.1 .agents/rules/minimalism.md (Ponytail-inspired minimalist rules)
+  const minimalismPath = path.join(rulesDir, 'minimalism.md');
+  const minimalismContent = `## Minimalist Coding Guidelines (Ponytail-Inspired)
+
+To avoid over-engineering, follow this 6-step decision ladder before writing code:
+
+1. **YAGNI (You Ain't Gonna Need It):** If a feature or abstraction is not explicitly requested, do not implement it.
+2. **Standard Library First:** Prefer built-in language structures and standard library modules over third-party dependencies or custom utility code.
+3. **Native Platform Features:** Leverage native browser, API, or system capabilities (e.g. native HTML input tags, basic HTTP methods) instead of complex UI or middleware libraries.
+4. **Reuse Existing Dependencies:** If custom logic is required, check if any currently installed packages in \`package.json\` (or requirements.txt) already provide the capability.
+5. **One-Liner Rule:** Attempt to implement the requested solution in a single line or short block of code before building multi-line components.
+6. **Minimalism:** Write only the absolute minimum lines of code required to fulfill the user requirement. Keep changes surgical, touching only what is broken or directly requested.
+`;
+  fs.writeFileSync(minimalismPath, minimalismContent, 'utf-8');
+  console.log(`Created: ${minimalismPath}`);
 
   // 2. .agents/workflows/hss-ce.md
   const workflowsDir = path.join(targetProject, '.agents', 'workflows');
@@ -120,7 +137,7 @@ Follow these instructions to run HSS-CE tasks:
 
 ## Core Developer Rules
 - **Think Before Coding**: State assumptions, push back on overcomplication.
-- **Simplicity First**: Write minimal code. Clean up imports/variables/functions that your changes make unused.
+- **Simplicity First**: Write minimal code. Clean up imports/variables/functions that your changes make unused. Refer to the minimalist coding guidelines in [.agents/rules/minimalism.md](file:///.agents/rules/minimalism.md).
 - **Surgical Changes**: Touch only what you must. Match existing style.
 
 ## Tool-First Guidelines
@@ -139,7 +156,7 @@ Follow these instructions to run HSS-CE tasks:
 
 ## Core Developer Rules
 - **Think Before Coding**: State assumptions, push back on overcomplication.
-- **Simplicity First**: Write minimal code. Clean up imports/variables/functions that your changes make unused.
+- **Simplicity First**: Write minimal code. Clean up imports/variables/functions that your changes make unused. Refer to the minimalist coding guidelines in [.agents/rules/minimalism.md](file:///.agents/rules/minimalism.md).
 - **Surgical Changes**: Touch only what you must. Match existing style.
 
 ## Tool-First Guidelines
@@ -157,7 +174,7 @@ Follow these instructions to run HSS-CE tasks:
 
 ## Core Developer Rules
 - **Think Before Coding**: State assumptions, push back on overcomplication.
-- **Simplicity First**: Write minimal code. Clean up imports/variables/functions that your changes make unused.
+- **Simplicity First**: Write minimal code. Clean up imports/variables/functions that your changes make unused. Refer to the minimalist coding guidelines in [.agents/rules/minimalism.md](file:///.agents/rules/minimalism.md).
 - **Surgical Changes**: Touch only what you must. Match existing style.
 
 ## Tool-First Guidelines

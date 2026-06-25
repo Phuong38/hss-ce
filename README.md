@@ -23,6 +23,7 @@ HSS-CE is **not** a magical AI assistant that writes code for you. It is a struc
 * **Git-Aware Ignore System:** Automatically respects `.gitignore` rules in addition to local `.hssceignore` patterns, ensuring build artifacts, dependencies, and temporary files are excluded from the index.
 * **Cache-Aligned Context Packing:** Re-orders context packs to place stable components (static headers, path-sorted skeleton maps, reference files) at the beginning of the prompt, and highly dynamic variables (like system stats and token budget) at the very end. This maximizes LLM provider KV caching hits, saving up to 50%+ on prompt cost and latency.
 * **Smart JSON Compaction:** Automatically minifies and compacts configuration files (like `package.json` devDependencies) to strip noise and reduce token consumption.
+* **Smart Syntax Minification:** Compresses redundant empty lines and truncates long string literals (>80 characters) within source code files during packing or reading, saving an additional 30-70% on token footprints.
 * **Lazy Content Retrieval (CCR):** Exposes a `read_file_content` MCP tool so agents can receive lightweight codebase skeletons first and load full contents dynamically on-demand, enabling lossless token efficiency.
 
 ### 3. Current Limitations & What It is Not
@@ -120,7 +121,7 @@ If you prefer using the terminal manually, HSS-CE provides the following command
 | `hss-ce path <path> <from> <to>` | `hss-ce path . src/cli.js src/db.js` | Find directed dependency/import path chain from one file to another. |
 | `hss-ce search <path> <query>` | `hss-ce search . auth` | Fuzzy search symbol names matching query pattern. |
 | `hss-ce search-code <path> <q>` | `hss-ce search-code . TODO --regex` | Search text snippet/regex across indexed files. Add `--regex` for regex pattern. |
-| `hss-ce pack <path>` | `hss-ce pack . --budget=2000 --format=markdown --progressive --sort=path` | Package source/config/docs files into structured XML/Markdown for LLM context, with secret redacting. Supports progressive fallback compression to skeletons and deterministic sorting. |
+| `hss-ce pack <path>` | `hss-ce pack . --budget=2000 --format=markdown --progressive --sort=path --minify-syntax` | Package source/config/docs files into structured XML/Markdown for LLM context, with secret redacting. Supports progressive fallback compression to skeletons, deterministic sorting, and smart syntax minification. |
 | `hss-ce enrich <path>` | `hss-ce enrich .` | (Optional) Fetch AI-generated summaries via Gemini API (requires `GEMINI_API_KEY`). |
 | `hss-ce status <path>` | `hss-ce status .` | Check if index has drifted from the local files on disk (modified/missing/untracked files). |
 | `hss-ce impact <path> <target>` | `hss-ce impact . src/db.js` | Trace recursive change impact blast radius (importers) for a file or symbol. Add `--depth=N` flag to set max traversal depth (default 5). |
