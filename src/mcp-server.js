@@ -4,6 +4,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { CodeDatabase } from './db.js';
 import { CodeIndexer } from './indexer.js';
 import { stripComments, generateSkeletonContent } from './parser.js';
+import { auditProject } from './auditor.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
@@ -362,6 +363,14 @@ export async function runMcpServer(dbPath, rootDir) {
               }
             },
             required: ['target']
+          }
+        },
+        {
+          name: 'security_audit',
+          description: 'Scan the codebase/workspace for security vulnerabilities, hardcoded secrets, and dependency issues.',
+          inputSchema: {
+            type: 'object',
+            properties: {}
           }
         }
       ]
@@ -1216,6 +1225,18 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
               {
                 type: 'text',
                 text: JSON.stringify(impact, null, 2)
+              }
+            ]
+          };
+        }
+
+        case 'security_audit': {
+          const auditResult = auditProject(db, rootDir);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(auditResult, null, 2)
               }
             ]
           };
