@@ -26,7 +26,7 @@
   },
   "homepage": "https://github.com/phuonglt/hss-ce#readme",
   "scripts": {
-    "test": "node tests/fts.test.js && node tests/pack.test.js && node tests/dependency_path.test.js && node tests/compression.test.js && node tests/drift_impact.test.js && node tests/watch.test.js && node tests/python_ast.test.js && node tests/go_rust.test.js && node tests/smart_json_crusher.test.js"
+    "test": "node tests/fts.test.js && node tests/pack.test.js && node tests/dependency_path.test.js && node tests/compression.test.js && node tests/drift_impact.test.js && node tests/watch.test.js && node tests/python_ast.test.js && node tests/go_rust.test.js && node tests/smart_json_crusher.test.js && node tests/log_crusher.test.js"
   },
 
   "dependencies": {

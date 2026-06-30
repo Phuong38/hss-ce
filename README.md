@@ -50,7 +50,8 @@ When you ask your agent (e.g. Claude Code or Cursor): *"Find all callers of the 
 5. Agent invokes `search_code(query: "TODO: fix", isRegex: false)` → HSS-CE performs a lightning-fast SQLite FTS5 index search, ranking results by BM25 relevance and PageRank structural importance.
 6. Agent invokes `check_index_drift()` → HSS-CE returns drift status to verify if index matches files on disk.
 7. Agent invokes `get_change_impact(target: "src/db.js", depth: 3)` → HSS-CE recursively traces upstream imports to assess blast radius before modifying any code.
-8. The agent reads only those specific files, completing the task with 90% fewer tokens and much higher accuracy.
+8. Agent invokes `crush_log(logContent: "...", tokenBudget: 2000)` → HSS-CE collapses internal framework stack frames and prunes non-essential logs under a token budget while preserving error/exception contexts.
+9. The agent reads only those specific files, completing the task with 90% fewer tokens and much higher accuracy.
 
 ---
 
@@ -124,6 +125,7 @@ If you prefer using the terminal manually, HSS-CE provides the following command
 | `hss-ce enrich <path>` | `hss-ce enrich .` | (Optional) Fetch AI-generated summaries via Gemini API (requires `GEMINI_API_KEY`). |
 | `hss-ce status <path>` | `hss-ce status .` | Check if index has drifted from the local files on disk (modified/missing/untracked files). |
 | `hss-ce impact <path> <target>` | `hss-ce impact . src/db.js` | Trace recursive change impact blast radius (importers) for a file or symbol. Add `--depth=N` flag to set max traversal depth (default 5). |
+| `hss-ce crush-log <file>` | `hss-ce crush-log tests.log --budget=1000` | Compress verbose compiler, build, or test runner log files to fit within a token budget by collapsing internal framework stack frames and retaining failure lines/contexts. |
 
 ## HSS-CE vs. 2026 Context & Agent Landscapes
 
@@ -155,6 +157,8 @@ As of mid-2026, the AI agent ecosystem has evolved significantly. Below is a com
     *   *Goal:* Add a local file watcher using `chokidar` to automatically sync SQLite `.hss-ce/graph.db` on file change events.
 *   **Phase 4: Smart JSON Crusher (Completed)**
     *   *Goal:* Recursively prune, slice, and compress nested JSON objects, arrays, and long strings under token budget constraints to save up to 90% of tokens on configuration and mock data files.
+*   **Phase 5: Smart Log & Stack Trace Crusher (Completed)**
+    *   *Goal:* Parse, group, and collapse internal framework stack traces (Node.js, python unittest/pytest, Go runtime, etc.) and prune non-essential log lines under token budget constraints while retaining error lines and local context.
 
 ---
 

@@ -4,6 +4,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { CodeDatabase } from './db.js';
 import { CodeIndexer } from './indexer.js';
 import { stripComments, generateSkeletonContent } from './parser.js';
+import { crushLog } from './log-crusher.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
@@ -362,6 +363,25 @@ export async function runMcpServer(dbPath, rootDir) {
               }
             },
             required: ['target']
+          }
+        },
+        {
+          name: 'crush_log',
+          description: 'Compresses verbose build/test logs and stack traces to save token budget. Collapses external stack lines and truncates non-essential lines while keeping error contexts.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              logContent: {
+                type: 'string',
+                description: 'The raw log content or stack trace string to compress'
+              },
+              tokenBudget: {
+                type: 'integer',
+                description: 'Target token budget limit (default 2000)',
+                default: 2000
+              }
+            },
+            required: ['logContent']
           }
         }
       ]
@@ -1216,6 +1236,23 @@ ${dependencies.length > 0 ? dependencies.map(d => `    <dependency file="${d.to_
               {
                 type: 'text',
                 text: JSON.stringify(impact, null, 2)
+              }
+            ]
+          };
+        }
+
+        case 'crush_log': {
+          const logContent = args?.logContent;
+          const tokenBudget = args?.tokenBudget ?? 2000;
+          if (!logContent) {
+            throw new Error('Missing parameter: logContent');
+          }
+          const crushed = crushLog(logContent, rootDir, tokenBudget);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: crushed
               }
             ]
           };

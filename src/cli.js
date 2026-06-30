@@ -4,6 +4,7 @@ import { CodeDatabase } from './db.js';
 import { CodeIndexer } from './indexer.js';
 import { runMcpServer } from './mcp-server.js';
 import { stripComments, generateSkeletonContent } from './parser.js';
+import { crushLog } from './log-crusher.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
@@ -1527,6 +1528,26 @@ node src/cli.js mcp .
       break;
     }
 
+    case 'crush-log': {
+      const logFile = args.slice(1).find(a => !a.startsWith('-'));
+      if (!logFile) {
+        console.error('Usage: hss-ce crush-log <log-file-path> [--budget=2000]');
+        process.exit(1);
+      }
+      const absoluteLogPath = path.resolve(logFile);
+      if (!fs.existsSync(absoluteLogPath)) {
+        console.error(`Log file does not exist: ${absoluteLogPath}`);
+        process.exit(1);
+      }
+      const logContent = fs.readFileSync(absoluteLogPath, 'utf-8');
+      const budgetFlag = args.find(a => a.startsWith('--budget='));
+      const tokenBudget = budgetFlag ? parseInt(budgetFlag.split('=')[1], 10) : 2000;
+      
+      const crushed = crushLog(logContent, process.cwd(), tokenBudget);
+      console.log(crushed);
+      break;
+    }
+
     default:
       console.error(`Unknown command: ${command}`);
       printUsage();
@@ -1566,6 +1587,8 @@ Commands:
   status <path>            Check if index has drifted from the local files.
   impact <path> <target>   Analyze recursive change impact blast radius for a file or symbol.
                            Flags: --depth=5 (maximum depth of traversal)
+  crush-log <file>         Compresses verbose build/test logs and stack traces to save tokens.
+                           Flags: --budget=2000 (target token limit)
 `);
 }
 
