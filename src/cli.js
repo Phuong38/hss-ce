@@ -4,6 +4,7 @@ import { CodeDatabase } from './db.js';
 import { CodeIndexer } from './indexer.js';
 import { runMcpServer } from './mcp-server.js';
 import { stripComments, generateSkeletonContent } from './parser.js';
+import { auditProject } from './auditor.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
@@ -1477,6 +1478,41 @@ node src/cli.js mcp .
       break;
     }
 
+    case 'audit': {
+      const db = fs.existsSync(dbPath) ? new CodeDatabase(dbPath) : { getAllFiles: () => [] };
+      console.log(`\n=== RUNNING SECURITY & VULNERABILITY AUDIT ===`);
+      console.log(`Target directory: ${rootDir}`);
+      
+      const { findings } = auditProject(db, rootDir);
+      
+      if (findings.length === 0) {
+        console.log(`\n✅ No security vulnerabilities or dependency smells detected.`);
+      } else {
+        const criticals = findings.filter(f => f.severity === 'critical');
+        const warnings = findings.filter(f => f.severity === 'warning');
+        
+        console.log(`\nFound ${findings.length} issues (${criticals.length} CRITICAL, ${warnings.length} WARNING):`);
+        
+        findings.forEach(f => {
+          const emoji = f.severity === 'critical' ? '🔴 [CRITICAL]' : '🟡 [WARNING]';
+          if (f.line > 0) {
+            console.log(`\n${emoji} ${f.filePath}:${f.line}`);
+          } else {
+            console.log(`\n${emoji} ${f.filePath}`);
+          }
+          console.log(`   Detail: ${f.detail}`);
+        });
+        
+        if (criticals.length > 0) {
+          console.log(`\n❌ Audit failed. Critical security risks detected.`);
+          process.exit(1);
+        } else {
+          console.log(`\n⚠️  Audit passed with warnings.`);
+        }
+      }
+      break;
+    }
+
     case 'impact': {
       if (!fs.existsSync(dbPath)) {
         console.error(`Index not found at: ${dbPath}. Run "index" command first.`);
@@ -1564,6 +1600,7 @@ Commands:
   explore <path>           Start interactive local codebase explorer dashboard.
                            Flags: --port=3000
   status <path>            Check if index has drifted from the local files.
+  audit <path>             Scan codebase for security vulnerabilities, secrets, and dependency issues.
   impact <path> <target>   Analyze recursive change impact blast radius for a file or symbol.
                            Flags: --depth=5 (maximum depth of traversal)
 `);

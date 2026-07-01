@@ -20,6 +20,7 @@ HSS-CE is **not** a magical AI assistant that writes code for you. It is a struc
 * **Eliminate Token Waste:** Coding agents (like Claude Code, Cursor, Aider) often read entire files or directory trees to understand import flows. HSS-CE exposes an MCP server that lets agents query precise skeletal structures and dependency trees under strict token budgets.
 * **Precise Symbol Navigation:** Instead of performing noisy text searches (like raw `grep` or `ripgrep`), agents use structured database queries to resolve exact function definitions and caller locations.
 * **Automated Redaction (Secret Guard):** Before packing codebase files to send to LLM context, HSS-CE automatically redacts credentials, private keys, and API tokens, preventing security leaks.
+* **Security & Vulnerability Auditor:** Automatically scans workspace files for hardcoded credentials/secrets (AWS, OpenAI, Slack), dangerous execution paths (eval, child_process, Python subprocess, Go os/exec, Rust Command), and vulnerable or wildcard dependencies in `package.json` to prevent supply-chain attacks.
 * **Git-Aware Ignore System:** Automatically respects `.gitignore` rules in addition to local `.hssceignore` patterns, ensuring build artifacts, dependencies, and temporary files are excluded from the index.
 * **Cache-Aligned Context Packing:** Re-orders context packs to place stable components (static headers, path-sorted skeleton maps, reference files) at the beginning of the prompt, and highly dynamic variables (like system stats and token budget) at the very end. This maximizes LLM provider KV caching hits, saving up to 50%+ on prompt cost and latency.
 * **Smart JSON Crusher:** Automatically minifies, prunes, and recursively crushes generic JSON files. Slices large arrays, truncates long strings, limits large object keys, and elides deep nesting to save up to 90% of tokens on configuration and mock data files.
@@ -50,7 +51,8 @@ When you ask your agent (e.g. Claude Code or Cursor): *"Find all callers of the 
 5. Agent invokes `search_code(query: "TODO: fix", isRegex: false)` → HSS-CE performs a lightning-fast SQLite FTS5 index search, ranking results by BM25 relevance and PageRank structural importance.
 6. Agent invokes `check_index_drift()` → HSS-CE returns drift status to verify if index matches files on disk.
 7. Agent invokes `get_change_impact(target: "src/db.js", depth: 3)` → HSS-CE recursively traces upstream imports to assess blast radius before modifying any code.
-8. The agent reads only those specific files, completing the task with 90% fewer tokens and much higher accuracy.
+8. Agent invokes `security_audit()` → HSS-CE performs a complete security scan of the codebase to identify dangerous APIs, secrets, and wildcard packages.
+9. The agent reads only those specific files, completing the task with 90% fewer tokens and much higher accuracy.
 
 ---
 
@@ -123,6 +125,7 @@ If you prefer using the terminal manually, HSS-CE provides the following command
 | `hss-ce pack <path>` | `hss-ce pack . --budget=2000 --format=markdown --progressive --sort=path` | Package source/config/docs files into structured XML/Markdown for LLM context, with secret redacting. Supports progressive fallback compression to skeletons and deterministic sorting. |
 | `hss-ce enrich <path>` | `hss-ce enrich .` | (Optional) Fetch AI-generated summaries via Gemini API (requires `GEMINI_API_KEY`). |
 | `hss-ce status <path>` | `hss-ce status .` | Check if index has drifted from the local files on disk (modified/missing/untracked files). |
+| `hss-ce audit <path>` | `hss-ce audit .` | Scan codebase for security vulnerabilities, hardcoded secrets, and dependency issues. Fail with exit code 1 if critical issues are found. |
 | `hss-ce impact <path> <target>` | `hss-ce impact . src/db.js` | Trace recursive change impact blast radius (importers) for a file or symbol. Add `--depth=N` flag to set max traversal depth (default 5). |
 
 ## HSS-CE vs. 2026 Context & Agent Landscapes
